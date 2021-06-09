@@ -1,15 +1,12 @@
 ﻿using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
-using Microsoft.CodeAnalysis.Text;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace RoslynHECS
@@ -62,6 +59,26 @@ namespace RoslynHECS
                 }
 
                 var classes = classVisitor.Classes;
+
+                foreach (var c in classes)
+                {
+                    ProcessComponent(c);
+                }
+            }
+        }
+
+        private static void ProcessComponent(ClassDeclarationSyntax c)
+        {
+            if (c.Parent.IsKind(SyntaxKind.ClassDeclaration))
+            {
+                var parentClass = c.Parent as ClassDeclarationSyntax;
+                var classCurrent = c.Identifier.Text;
+                var parent = parentClass.Identifier.Text;
+
+                if (parent.Contains("BaseComponent") || classCurrent.Contains("Component"))
+                {
+                    Console.WriteLine("нашли компонент " + classCurrent);
+                }
             }
         }
 
