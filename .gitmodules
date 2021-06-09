@@ -1,0 +1,3 @@
+[submodule "HECSFrameworkCore"]
+	path = HECSFrameworkCore
+	url = https://github.com/Brightori/HECSFrameworkCore.git
