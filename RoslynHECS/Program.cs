@@ -13,7 +13,8 @@ namespace RoslynHECS
 {
     class Program
     {
-
+        private static List<string> components = new List<string>(256);
+        private static List<ClassDeclarationSyntax> componentsDeclarations = new List<ClassDeclarationSyntax>(256);
 
         static async Task Main(string[] args)
         {
@@ -49,9 +50,13 @@ namespace RoslynHECS
                 // TODO: Do analysis on the projects in the loaded solution
 
                 var classVisitor = new ClassVirtualizationVisitor();
+                List<INamedTypeSymbol> types = new List<INamedTypeSymbol>(256);
 
                 foreach (var compilation in compilations)
                 {
+                    var list = GetTypesByMetadataName(compilation, "BaseComponent").ToList();
+                    types.AddRange(list);
+
                     foreach (var syntaxTree in compilation.SyntaxTrees)
                     {
                         classVisitor.Visit(syntaxTree.GetRoot());
@@ -64,21 +69,32 @@ namespace RoslynHECS
                 {
                     ProcessComponent(c);
                 }
+
+                Console.WriteLine("нашли компоненты " + components.Count);
             }
+        }
+
+        public static IEnumerable<INamedTypeSymbol> GetTypesByMetadataName(Compilation compilation, string typeMetadataName)
+        {
+            return compilation.References
+                .Select(compilation.GetAssemblyOrModuleSymbol)
+                .OfType<IAssemblySymbol>()
+                .Select(assemblySymbol => assemblySymbol.GetTypeByMetadataName(typeMetadataName))
+                .Where(t => t != null);
         }
 
         private static void ProcessComponent(ClassDeclarationSyntax c)
         {
-            if (c.Parent.IsKind(SyntaxKind.ClassDeclaration))
-            {
-                var parentClass = c.Parent as ClassDeclarationSyntax;
-                var classCurrent = c.Identifier.Text;
-                var parent = parentClass.Identifier.Text;
+            var classCurrent = c.Identifier.ValueText;
+            var baseClass = c.BaseList != null ? c.BaseList.ToString() : string.Empty;
+            var isAbstract = c.Modifiers.Any(x => x.IsKind(SyntaxKind.AbstractKeyword));
 
-                if (parent.Contains("BaseComponent") || classCurrent.Contains("Component"))
-                {
-                    Console.WriteLine("нашли компонент " + classCurrent);
-                }
+
+            if (baseClass.Contains("BaseComponent") && !isAbstract)
+            {
+                components.Add(classCurrent);
+                componentsDeclarations.Add(c);
+                Console.WriteLine("нашли компонент " + classCurrent);
             }
         }
 
