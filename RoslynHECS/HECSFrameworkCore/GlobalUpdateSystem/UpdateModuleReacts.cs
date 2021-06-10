@@ -1,6 +1,7 @@
 ﻿using HECSFramework.Core.Helpers;
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace HECSFramework.Core
 {
@@ -46,7 +47,7 @@ namespace HECSFramework.Core
 
         private static void UpdateTimer(ref float timer)
         {
-            //timer -= Time.deltaTime;
+            timer -= Time.deltaTime;
         }
         
         private void OneWayQueue()

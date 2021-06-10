@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using UnityEngine;
 
 namespace HECSFramework.Core.Generator
 {
@@ -42,7 +43,7 @@ namespace HECSv2
             }
 
             var result = GetSyntaxOutput(main.FlatRoot);
-            //var path = Application.dataPath + "\\test.cs";
+            var path = Application.dataPath + "\\test.cs";
 
             //if (!File.Exists(path))
             //    File.Create(path);
