@@ -104,10 +104,11 @@ namespace RoslynHECS
         private static void SaveFiles()
         {
             var processGeneration = new CodeGenerator();
-            SaveToFile(SystemBindings, processGeneration.GetSystemBindsByRoslyn());
             SaveToFile(TypeProvider, processGeneration.GenerateTypesMapRoslyn());
-            SaveToFile(HecsMasks, processGeneration.GenerateHecsMasksRoslyn());
+            SaveToFile(MaskProvider, processGeneration.GenerateMaskProvider());
+            SaveToFile(SystemBindings, processGeneration.GetSystemBindsByRoslyn());
             SaveToFile(ComponentContext, processGeneration.GetComponentContextRoslyn());
+            SaveToFile(HecsMasks, processGeneration.GenerateHecsMasksRoslyn());
         }
 
         private static void SaveToFile(string name, string data, string pathToDirectory = AssetPath+HECSGenerated, bool needToImport = false)
