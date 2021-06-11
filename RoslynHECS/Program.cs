@@ -18,11 +18,13 @@ namespace RoslynHECS
     class Program
     {
         public static List<string> components = new List<string>(256);
+        public static List<string> systems = new List<string>(256);
         public static List<ClassDeclarationSyntax> componentsDeclarations = new List<ClassDeclarationSyntax>(256);
         public static List<ClassDeclarationSyntax> systemsDeclarations = new List<ClassDeclarationSyntax>(256);
         public static List<StructDeclarationSyntax> globalCommands = new List<StructDeclarationSyntax>(256);
         public static List<StructDeclarationSyntax> localCommands = new List<StructDeclarationSyntax>(256);
-
+        private static List<ClassDeclarationSyntax> classes;
+        private static List<StructDeclarationSyntax> structs;
         public const string AssetPath = @"D:\Develop\CyberMafia\Assets\";
         public const string HECSGenerated = @"\Scripts\HECSGenerated\";
         public const string SolutionPath = @"D:\Develop\CyberMafia\CyberMafia.sln";
@@ -36,6 +38,8 @@ namespace RoslynHECS
         private const string BluePrintsProvider = "BluePrintsProvider.cs";
         private const string Documentation = "Documentation.cs";
         private const string MapResolver = "MapResolver.cs";
+
+        private const string BaseComponent = "BaseComponent";
 
         static async Task Main(string[] args)
         {
@@ -72,14 +76,9 @@ namespace RoslynHECS
 
                 var classVisitor = new ClassVirtualizationVisitor();
                 var structVisitor = new StructVirtualizationVisitor();
-                
-                List<INamedTypeSymbol> types = new List<INamedTypeSymbol>(256);
 
                 foreach (var compilation in compilations)
                 {
-                    var list = GetTypesByMetadataName(compilation, "BaseComponent").ToList();
-                    types.AddRange(list);
-
                     foreach (var syntaxTree in compilation.SyntaxTrees)
                     {
                         classVisitor.Visit(syntaxTree.GetRoot());
@@ -87,8 +86,8 @@ namespace RoslynHECS
                     }
                 }
 
-                var classes = classVisitor.Classes;
-                var structs = structVisitor.Structs;
+                classes = classVisitor.Classes;
+                structs = structVisitor.Structs;
 
                 foreach (var c in classes)
                     ProcessClasses(c);
@@ -106,6 +105,8 @@ namespace RoslynHECS
         {
             var processGeneration = new CodeGenerator();
             SaveToFile(SystemBindings, processGeneration.GetSystemBindsByRoslyn());
+            SaveToFile(TypeProvider, processGeneration.GenerateTypesMapRoslyn());
+            SaveToFile(HecsMasks, processGeneration.GenerateHecsMasksRoslyn());
         }
 
         private static void SaveToFile(string name, string data, string pathToDirectory = AssetPath+HECSGenerated, bool needToImport = false)
@@ -154,23 +155,50 @@ namespace RoslynHECS
         private static void ProcessClasses(ClassDeclarationSyntax c)
         {
             var classCurrent = c.Identifier.ValueText;
-            var baseClass = c.BaseList != null ? c.BaseList.ToString() : string.Empty;
+            var baseClass = c.BaseList != null ? c.BaseList.ChildNodes()?.ToArray() : new SyntaxNode[0];
             var isAbstract = c.Modifiers.Any(x => x.IsKind(SyntaxKind.AbstractKeyword));
 
-            if (baseClass.Contains("BaseComponent") && !isAbstract)
+            if (baseClass.Any(x=> x.ToString().Contains("BaseComponent")) && !isAbstract)
             {
+                if (components.Contains(classCurrent))
+                    return;
+
                 components.Add(classCurrent);
                 componentsDeclarations.Add(c);
                 Console.WriteLine("нашли компонент " + classCurrent);
             }
             
-            if (baseClass.Contains(typeof(BaseSystem).Name) && !isAbstract)
+            if (baseClass.Any(x => x.ToString().Contains(typeof(BaseSystem).Name)) && !isAbstract && !classCurrent.Contains("SystemBluePrint"))
             {
-                components.Add(classCurrent);
+                if (systems.Contains(classCurrent))
+                    return;
+
+                systems.Add(classCurrent);
                 systemsDeclarations.Add(c);
                 Console.WriteLine("----");
                 Console.WriteLine("нашли систему " + classCurrent);
             }
+        }
+
+        private bool IsComponent(ClassDeclarationSyntax c)
+        {
+            var baseClass = c.BaseList != null ? c.BaseList.ChildNodes()?.ToArray() : new SyntaxNode[0];
+
+            if (baseClass.Length == 0)
+                return false;
+
+            if (baseClass.Any(x => x.ToString().Contains(BaseComponent)))
+                return true;
+
+            var gatherParents = classes.Where(x => baseClass.Any(z => z.ToString() == x.Identifier.ValueText));
+
+            foreach (var parent in gatherParents)
+            {
+                if (IsComponent(parent))
+                    return true;
+            }
+
+            return false;
         }
 
         class ClassVirtualizationVisitor : CSharpSyntaxRewriter

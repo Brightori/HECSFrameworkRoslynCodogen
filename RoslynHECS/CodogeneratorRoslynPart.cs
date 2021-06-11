@@ -1,4 +1,5 @@
-﻿using RoslynHECS;
+﻿using Microsoft.CodeAnalysis.CSharp.Syntax;
+using RoslynHECS;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,6 +10,7 @@ namespace HECSFramework.Core.Generator
 {
     public partial class CodeGenerator
     {
+
         #region SystemsBinding
         public string GetSystemBindsByRoslyn()
         {
@@ -89,7 +91,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(new LeftScopeSyntax(1));
             tree.Add(new TabSimpleSyntax(2, "public TypesProvider()"));
             tree.Add(new LeftScopeSyntax(2));
-            tree.Add(new TabSimpleSyntax(3, $"Count = {componentTypes.Count + 1};"));
+            tree.Add(new TabSimpleSyntax(3, $"Count = {Program.componentsDeclarations.Count + 1};"));
             tree.Add(new TabSimpleSyntax(3, $"MapIndexes = GetMapIndexes();"));
             tree.Add(new TabSimpleSyntax(3, $"TypeToComponentIndex = GetTypeToComponentIndexes();"));
             tree.Add(new TabSimpleSyntax(3, $"HashToType = GetHashToTypeDictionary();"));
@@ -121,11 +123,11 @@ namespace HECSFramework.Core.Generator
             componentsSegment.Add(new ParagraphSyntax());
 
             //here we know how much mask field we have
-            var m = ComponentsCount();
+            var m = ComponentsCountRoslyn();
 
-            for (int i = 0; i < componentTypesByClass.Count; i++)
+            for (int i = 0; i < Program.componentsDeclarations.Count; i++)
             {
-                Type c = componentTypesByClass[i];
+                var c = Program.componentsDeclarations[i];
                 var index = i;
                 componentsSegment.Add(GetComponentForTypeMapRoslyn(index, m, c));
             }
@@ -168,7 +170,7 @@ namespace HECSFramework.Core.Generator
             getComponentFunc.Add(new LeftScopeSyntax(2));
             getComponentFunc.Add(new TabSimpleSyntax(3, "switch (hashCodeType)"));
             getComponentFunc.Add(new LeftScopeSyntax(3));
-            getComponentFunc.Add(GetSystemsByHashCode());
+            getComponentFunc.Add(GetSystemsByHashCodeRoslyn());
             getComponentFunc.Add(new RightScopeSyntax(3));
             getComponentFunc.Add(new ParagraphSyntax());
             getComponentFunc.Add(new TabSimpleSyntax(3, "return default;"));
@@ -181,15 +183,15 @@ namespace HECSFramework.Core.Generator
         {
             var tree = new TreeSyntaxNode();
 
-            for (int i = 0; i < componentTypes.Count; i++)
+            for (int i = 0; i < Program.componentsDeclarations.Count; i++)
             {
                 if (i > 0)
                     tree.Add(new ParagraphSyntax());
 
-                var component = componentTypes[i];
+                var component = Program.componentsDeclarations[i];
 
-                tree.Add(new TabSimpleSyntax(4, $"case {IndexGenerator.GetIndexForType(component)}:"));
-                tree.Add(new TabSimpleSyntax(5, $"return new {component.Name}();"));
+                tree.Add(new TabSimpleSyntax(4, $"case {IndexGenerator.GetIndexForType(component.Identifier.ValueText)}:"));
+                tree.Add(new TabSimpleSyntax(5, $"return new {component.Identifier.ValueText}();"));
             }
 
             return tree;
@@ -199,15 +201,15 @@ namespace HECSFramework.Core.Generator
         {
             var tree = new TreeSyntaxNode();
 
-            for (int i = 0; i < systems.Count; i++)
+            for (int i = 0; i < Program.systemsDeclarations.Count; i++)
             {
                 if (i > 0)
                     tree.Add(new ParagraphSyntax());
 
-                var component = systems[i];
+                var system = Program.systemsDeclarations[i];
 
-                tree.Add(new TabSimpleSyntax(4, $"case {IndexGenerator.GetIndexForType(component)}:"));
-                tree.Add(new TabSimpleSyntax(5, $"return new {component.Name}();"));
+                tree.Add(new TabSimpleSyntax(4, $"case {IndexGenerator.GetIndexForType(system.Identifier.ValueText)}:"));
+                tree.Add(new TabSimpleSyntax(5, $"return new {system.Identifier.ValueText}();"));
             }
 
             return tree;
@@ -228,10 +230,10 @@ namespace HECSFramework.Core.Generator
             tree.Add(new RightScopeSyntax(3, true));
             tree.Add(new RightScopeSyntax(2));
 
-            for (int i = 0; i < componentTypes.Count; i++)
+            for (int i = 0; i < Program.componentsDeclarations.Count; i++)
             {
-                var hash = IndexGenerator.GetIndexForType(componentTypes[i]);
-                dicBody.Add(new TabSimpleSyntax(4, $"{{ {hash}, typeof({componentTypes[i].Name})}},"));
+                var hash = IndexGenerator.GetIndexForType(Program.componentsDeclarations[i].Identifier.ValueText);
+                dicBody.Add(new TabSimpleSyntax(4, $"{{ {hash}, typeof({Program.componentsDeclarations[i].Identifier.ValueText})}},"));
             }
 
             return tree;
@@ -251,17 +253,9 @@ namespace HECSFramework.Core.Generator
             tree.Add(new RightScopeSyntax(3, true));
             tree.Add(new RightScopeSyntax(2));
 
-            for (int i = 0; i < componentTypes.Count; i++)
+            for (int i = 0; i < Program.componentsDeclarations.Count; i++)
             {
-                var interfaces = componentTypes[i].GetInterfaces();
-
-                foreach (var @interface in interfaces)
-                {
-                    if (@interface.Name.Contains(componentTypes[i].Name))
-                        dicBody.Add(new TabSimpleSyntax(4, $"{{ typeof({@interface.Name}), {i} }},"));
-                }
-
-                dicBody.Add(new TabSimpleSyntax(4, $"{{ typeof({componentTypes[i].Name}), {i} }},"));
+                dicBody.Add(new TabSimpleSyntax(4, $"{{ typeof({Program.componentsDeclarations[i].Identifier.ValueText}), {i} }},"));
             }
 
             return tree;
@@ -281,24 +275,16 @@ namespace HECSFramework.Core.Generator
             tree.Add(new RightScopeSyntax(3, true));
             tree.Add(new RightScopeSyntax(2));
 
-            for (int i = 0; i < componentTypes.Count; i++)
+            for (int i = 0; i < Program.componentsDeclarations.Count; i++)
             {
-                var interfaces = componentTypes[i].GetInterfaces();
-                var hash = IndexGenerator.GetIndexForType(componentTypes[i]);
-
-                foreach (var @interface in interfaces)
-                {
-                    if (@interface.Name.Contains(componentTypes[i].Name))
-                        dicBody.Add(new TabSimpleSyntax(4, $"{{ typeof({@interface.Name}), {hash} }},"));
-                }
-
-                dicBody.Add(new TabSimpleSyntax(4, $"{{ typeof({componentTypes[i].Name}), {hash} }},"));
+                var hash = IndexGenerator.GetIndexForType(Program.componentsDeclarations[i].Identifier.ValueText);
+                dicBody.Add(new TabSimpleSyntax(4, $"{{ typeof({Program.componentsDeclarations[i].Identifier.ValueText}), {hash} }},"));
             }
 
             return tree;
         }
 
-        private ISyntax GetComponentForTypeMapRoslyn(int index, int fieldCount, Type c)
+        private ISyntax GetComponentForTypeMapRoslyn(int index, int fieldCount, Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax c)
         {
             var composite = new TreeSyntaxNode();
             var MaskPart = new TreeSyntaxNode();
@@ -307,8 +293,8 @@ namespace HECSFramework.Core.Generator
             composite.Add(new ParagraphSyntax());
             composite.Add(new TabSpaceSyntax(3));
             composite.Add(new SimpleSyntax(CParse.LeftScope));
-            composite.Add(new CompositeSyntax(new SimpleSyntax(CParse.Space + IndexGenerator.GetIndexForType(c).ToString() + CParse.Comma)));
-            composite.Add(new SimpleSyntax($" new ComponentMaskAndIndex {{ComponentName = {CParse.Quote}{ c.Name }{(CParse.Quote)}, ComponentsMask = new {typeof(HECSMask).Name}"));
+            composite.Add(new CompositeSyntax(new SimpleSyntax(CParse.Space + IndexGenerator.GetIndexForType(c.Identifier.ValueText).ToString() + CParse.Comma)));
+            composite.Add(new SimpleSyntax($" new ComponentMaskAndIndex {{ComponentName = {CParse.Quote}{ c.Identifier.ValueText }{(CParse.Quote)}, ComponentsMask = new {typeof(HECSMask).Name}"));
             composite.Add(new ParagraphSyntax());
             composite.Add(MaskPart);
             composite.Add(new CompositeSyntax(new TabSpaceSyntax(3), new SimpleSyntax("}},")));
@@ -374,6 +360,106 @@ namespace HECSFramework.Core.Generator
         }
         #endregion
 
+
+        #region HECSMasks
+        public string GenerateHecsMasksRoslyn()
+        {
+            var tree = new TreeSyntaxNode();
+
+            tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
+            tree.Add(new LeftScopeSyntax());
+            tree.Add(new TabSimpleSyntax(1, "public static partial class HMasks"));
+            tree.Add(new LeftScopeSyntax(1));
+            tree.Add(GetHecsMasksFieldsRoslyn());
+            tree.Add(GetHecsMasksConstructorRoslyn());
+            tree.Add(new RightScopeSyntax(1));
+            tree.Add(new RightScopeSyntax());
+
+            return tree.ToString();
+        }
+
+        private ISyntax GetNewComponentSolvedRoslyn(ClassDeclarationSyntax c, int index, int fieldCount)
+        {
+            var tree = new TreeSyntaxNode();
+            var maskBody = new TreeSyntaxNode();
+
+            tree.Add(new ParagraphSyntax());
+            tree.Add(new TabSimpleSyntax(4, $"new {typeof(HECSMask).Name}"));
+            tree.Add(new LeftScopeSyntax(4));
+            tree.Add(maskBody);
+            tree.Add(new RightScopeSyntax(4, true));
+
+            maskBody.Add(new TabSimpleSyntax(5, $"Index = {index},"));
+
+            var maskSplitToArray = CalculateIndexesForMask(index, fieldCount);
+
+            for (int i = 0; i < fieldCount; i++)
+            {
+                if (maskSplitToArray[fieldCount - 1] > 1 && i < fieldCount - 1)
+                {
+                    maskBody.Add(new CompositeSyntax(new TabSpaceSyntax(5), new SimpleSyntax($"Mask0{i + 1} = 1ul << {0},")));
+                    maskBody.Add(new ParagraphSyntax());
+                    continue;
+                }
+
+                maskBody.Add(new CompositeSyntax(new TabSpaceSyntax(5), new SimpleSyntax($"Mask0{i + 1} = 1ul << {maskSplitToArray[i]},")));
+
+                if (i > fieldCount - 1)
+                    continue;
+
+                maskBody.Add(new ParagraphSyntax());
+            }
+
+            return tree;
+        }
+
+        private ISyntax GetHecsMasksConstructorRoslyn()
+        {
+            var tree = new TreeSyntaxNode();
+            tree.Add(new ParagraphSyntax());
+            tree.Add(new TabSimpleSyntax(2, "static HMasks()"));
+            tree.Add(new LeftScopeSyntax(2));
+            tree.Add(GetHMaskBodyRoslyn());
+            tree.Add(new RightScopeSyntax(2));
+
+            return tree;
+        }
+
+        private ISyntax GetHMaskBodyRoslyn()
+        {
+            var tree = new TreeSyntaxNode();
+
+            for (int i = 0; i < Program.componentsDeclarations.Count; i++)
+            {
+                var className = Program.componentsDeclarations[i].Identifier.ValueText.ToLower();
+                var classType = Program.componentsDeclarations[i];
+                var hash = IndexGenerator.GetIndexForType(classType.Identifier.ValueText);
+                tree.Add(new TabSimpleSyntax(4, $"{className} = {GetNewComponentSolvedRoslyn(classType, i, ComponentsCountRoslyn())}"));
+            }
+
+            return tree;
+        }
+
+        private string GetHECSMaskNameRoslyn()
+        {
+            return typeof(HECSMask).Name;
+        }
+
+        private ISyntax GetHecsMasksFieldsRoslyn()
+        {
+            var tree = new TreeSyntaxNode();
+
+            var hecsMaskname = typeof(HECSMask).Name;
+
+            for (int i = 0; i < Program.componentsDeclarations.Count; i++)
+            {
+                tree.Add(new TabSimpleSyntax(2, $"private static {hecsMaskname} {Program.componentsDeclarations[i].Identifier.ValueText.ToLower()};"));
+                tree.Add(new TabSimpleSyntax(2, $"public static ref {hecsMaskname} {Program.componentsDeclarations[i].Identifier.ValueText} => ref {Program.componentsDeclarations[i].Identifier.ValueText.ToLower()};"));
+            }
+
+            return tree;
+        }
+        #endregion 
 
         #region Helpers
         private int ComponentsCountRoslyn()
