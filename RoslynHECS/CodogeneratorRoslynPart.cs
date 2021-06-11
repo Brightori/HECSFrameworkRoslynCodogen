@@ -1,4 +1,5 @@
-﻿using Microsoft.CodeAnalysis.CSharp.Syntax;
+﻿using HECSFramework.Core.Helpers;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using RoslynHECS;
 using System;
 using System.Collections.Generic;
@@ -72,7 +73,6 @@ namespace HECSFramework.Core.Generator
             return tree;
         }
         #endregion
-
 
         #region GenerateTypesMap
         public string GenerateTypesMapRoslyn()
@@ -360,7 +360,6 @@ namespace HECSFramework.Core.Generator
         }
         #endregion
 
-
         #region HECSMasks
         public string GenerateHecsMasksRoslyn()
         {
@@ -459,7 +458,162 @@ namespace HECSFramework.Core.Generator
 
             return tree;
         }
-        #endregion 
+        #endregion
+
+        #region ComponentContext
+        public string GetComponentContextRoslyn()
+        {
+            var overTree = new TreeSyntaxNode();
+            var entityExtention = new TreeSyntaxNode();
+
+            var usings = new TreeSyntaxNode();
+            var nameSpaces = new List<string>();
+
+            var tree = new TreeSyntaxNode();
+            var properties = new TreeSyntaxNode();
+
+            var disposable = new TreeSyntaxNode();
+            var disposableBody = new TreeSyntaxNode();
+
+
+            var switchAdd = new TreeSyntaxNode();
+            var switchBody = new TreeSyntaxNode();
+
+            var switchRemove = new TreeSyntaxNode();
+            var switchRemoveBody = new TreeSyntaxNode();
+
+            overTree.Add(tree);
+            overTree.Add(entityExtention);
+
+            tree.Add(usings);
+            tree.Add(new ParagraphSyntax());
+
+            tree.Add(new NameSpaceSyntax(DefaultNameSpace));
+            tree.Add(new LeftScopeSyntax());
+
+            tree.Add(new CompositeSyntax(new TabSpaceSyntax(1), new SimpleSyntax("public partial class ComponentContext : IDisposable"), new ParagraphSyntax()));
+            tree.Add(new LeftScopeSyntax(1));
+            tree.Add(properties);
+            tree.Add(switchAdd);
+            tree.Add(switchRemove);
+            tree.Add(disposable);
+            tree.Add(new RightScopeSyntax(1));
+            tree.Add(new RightScopeSyntax());
+
+            switchAdd.Add(new ParagraphSyntax());
+            switchAdd.Add(new CompositeSyntax(new TabSpaceSyntax(2),
+                new SimpleSyntax("partial void Add(IComponent component)"), new ParagraphSyntax()));
+            switchAdd.Add(new LeftScopeSyntax(2));
+
+            switchAdd.Add(new CompositeSyntax(new TabSpaceSyntax(3), new SimpleSyntax("switch (component)"), new ParagraphSyntax()));
+            switchAdd.Add(new LeftScopeSyntax(3));
+            switchAdd.Add(switchBody);
+            switchAdd.Add(new RightScopeSyntax(3));
+            switchAdd.Add(new RightScopeSyntax(2));
+
+            switchAdd.Add(new ParagraphSyntax());
+            switchAdd.Add(new CompositeSyntax(new TabSpaceSyntax(2),
+                new SimpleSyntax("partial void Remove(IComponent component)"), new ParagraphSyntax()));
+            switchAdd.Add(new LeftScopeSyntax(2));
+
+            switchAdd.Add(new CompositeSyntax(new TabSpaceSyntax(3), new SimpleSyntax("switch (component)"), new ParagraphSyntax()));
+            switchAdd.Add(new LeftScopeSyntax(3));
+            switchAdd.Add(switchRemoveBody);
+            switchAdd.Add(new RightScopeSyntax(3));
+            switchAdd.Add(new RightScopeSyntax(2));
+
+            foreach (var c in Program.componentsDeclarations)
+            {
+                var name = c.Identifier.ValueText;
+
+                properties.Add(new CompositeSyntax(new TabSpaceSyntax(2),
+                    new SimpleSyntax($"public {name} Get{name} {{ get; private set; }}"), new ParagraphSyntax()));
+
+                var cArgument = name;
+                var fixedArg = char.ToLower(cArgument[0]) + cArgument.Substring(1);
+
+                switchBody.Add(new CompositeSyntax(new TabSpaceSyntax(4), new SimpleSyntax($"case {name} {fixedArg}:"), new ParagraphSyntax()));
+                switchBody.Add(new LeftScopeSyntax(5));
+                switchBody.Add(new CompositeSyntax(new TabSpaceSyntax(6), new SimpleSyntax($"Get{name} = {fixedArg};"), new ParagraphSyntax()));
+                switchBody.Add(new CompositeSyntax(new TabSpaceSyntax(6), new ReturnSyntax()));
+                switchBody.Add(new RightScopeSyntax(5));
+
+                switchRemoveBody.Add(new CompositeSyntax(new TabSpaceSyntax(4), new SimpleSyntax($"case {name} {fixedArg}:"), new ParagraphSyntax()));
+                switchRemoveBody.Add(new LeftScopeSyntax(5));
+                switchRemoveBody.Add(new CompositeSyntax(new TabSpaceSyntax(6), new SimpleSyntax($"Get{name} = null;"), new ParagraphSyntax()));
+                switchRemoveBody.Add(new CompositeSyntax(new TabSpaceSyntax(6), new ReturnSyntax()));
+                switchRemoveBody.Add(new RightScopeSyntax(5));
+
+                disposableBody.Add(new CompositeSyntax(new TabSpaceSyntax(3), new SimpleSyntax($"Get{name} = null;"), new ParagraphSyntax()));
+                //if (c != componentTypes.Last())
+                //    switchBody.Add(new ParagraphSyntax());
+
+                var t = c.SyntaxTree.GetRoot().ChildNodes();
+
+                foreach (var cn in t)
+                {
+                    if (cn is NamespaceDeclarationSyntax declarationSyntax)
+                    {
+                        nameSpaces.AddOrRemoveElement(declarationSyntax.Name.ToString(), true);
+                    }
+                }
+            }
+
+            nameSpaces.AddOrRemoveElement("Components", true);
+
+            foreach (var n in nameSpaces)
+                usings.Add(new UsingSyntax(n));
+
+            AddEntityExtentionRoslyn(entityExtention);
+
+            usings.Add(new UsingSyntax("System", 1));
+            usings.Add(new UsingSyntax("System.Runtime.CompilerServices", 1));
+
+
+            disposable.Add(new ParagraphSyntax());
+            disposable.Add(new CompositeSyntax(new TabSpaceSyntax(2), new SimpleSyntax("public void Dispose()"), new ParagraphSyntax()));
+            disposable.Add(new LeftScopeSyntax(2));
+            disposable.Add(disposableBody);
+            disposable.Add(new RightScopeSyntax(2));
+
+
+            return overTree.ToString();
+        }
+
+        private void AddEntityExtentionRoslyn(TreeSyntaxNode tree)
+        {
+            var body = new TreeSyntaxNode();
+
+            tree.Add(new ParagraphSyntax());
+
+            tree.Add(new NameSpaceSyntax(DefaultNameSpace));
+            tree.Add(new LeftScopeSyntax());
+
+            tree.Add(new CompositeSyntax(new TabSpaceSyntax(1), new SimpleSyntax("public static class EntityComponentExtentions"), new ParagraphSyntax()));
+            tree.Add(new LeftScopeSyntax(1));
+            tree.Add(body);
+            tree.Add(new RightScopeSyntax(1));
+            tree.Add(new RightScopeSyntax());
+
+            foreach (var c in Program.componentsDeclarations)
+            {
+                var name = c.Identifier.ValueText;
+
+                body.Add(new CompositeSyntax(new TabSpaceSyntax(2), new SimpleSyntax(AggressiveInline), new ParagraphSyntax()));
+                body.Add(new CompositeSyntax(new TabSpaceSyntax(2),
+                    new SimpleSyntax($"public static {name} Get{name}(this IEntity entity)"), new ParagraphSyntax()));
+                body.Add(new LeftScopeSyntax(2));
+                body.Add(new CompositeSyntax(new TabSpaceSyntax(3),
+                    new SimpleSyntax($"return entity.ComponentContext.Get{name};"), new ParagraphSyntax()));
+                body.Add(new RightScopeSyntax(2));
+
+                if (c != Program.componentsDeclarations.Last())
+                    body.Add(new ParagraphSyntax());
+            }
+        }
+
+        #endregion
+
 
         #region Helpers
         private int ComponentsCountRoslyn()

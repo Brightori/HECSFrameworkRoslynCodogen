@@ -107,6 +107,7 @@ namespace RoslynHECS
             SaveToFile(SystemBindings, processGeneration.GetSystemBindsByRoslyn());
             SaveToFile(TypeProvider, processGeneration.GenerateTypesMapRoslyn());
             SaveToFile(HecsMasks, processGeneration.GenerateHecsMasksRoslyn());
+            SaveToFile(ComponentContext, processGeneration.GetComponentContextRoslyn());
         }
 
         private static void SaveToFile(string name, string data, string pathToDirectory = AssetPath+HECSGenerated, bool needToImport = false)
@@ -158,7 +159,7 @@ namespace RoslynHECS
             var baseClass = c.BaseList != null ? c.BaseList.ChildNodes()?.ToArray() : new SyntaxNode[0];
             var isAbstract = c.Modifiers.Any(x => x.IsKind(SyntaxKind.AbstractKeyword));
 
-            if (baseClass.Any(x=> x.ToString().Contains("BaseComponent")) && !isAbstract)
+            if (IsComponent(c) && !isAbstract)
             {
                 if (components.Contains(classCurrent))
                     return;
@@ -168,19 +169,20 @@ namespace RoslynHECS
                 Console.WriteLine("нашли компонент " + classCurrent);
             }
             
-            if (baseClass.Any(x => x.ToString().Contains(typeof(BaseSystem).Name)) && !isAbstract && !classCurrent.Contains("SystemBluePrint"))
+            if (IsSystem(c) && !isAbstract && !classCurrent.Contains("SystemBluePrint"))
             {
                 if (systems.Contains(classCurrent))
                     return;
 
                 systems.Add(classCurrent);
                 systemsDeclarations.Add(c);
+                
                 Console.WriteLine("----");
                 Console.WriteLine("нашли систему " + classCurrent);
             }
         }
 
-        private bool IsComponent(ClassDeclarationSyntax c)
+        private static bool IsComponent(ClassDeclarationSyntax c)
         {
             var baseClass = c.BaseList != null ? c.BaseList.ChildNodes()?.ToArray() : new SyntaxNode[0];
 
@@ -195,6 +197,27 @@ namespace RoslynHECS
             foreach (var parent in gatherParents)
             {
                 if (IsComponent(parent))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsSystem(ClassDeclarationSyntax c)
+        {
+            var baseClass = c.BaseList != null ? c.BaseList.ChildNodes()?.ToArray() : new SyntaxNode[0];
+
+            if (baseClass.Length == 0)
+                return false;
+
+            if (baseClass.Any(x => x.ToString().Contains(typeof(BaseSystem).Name)))
+                return true;
+
+            var gatherParents = classes.Where(x => baseClass.Any(z => z.ToString() == x.Identifier.ValueText));
+
+            foreach (var parent in gatherParents)
+            {
+                if (IsSystem(parent))
                     return true;
             }
 
