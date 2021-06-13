@@ -1,4 +1,5 @@
 ﻿using HECSFramework.Core.Helpers;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using RoslynHECS;
 using System;
@@ -717,7 +718,7 @@ namespace HECSFramework.Core.Generator
             maskClassConstructor.Add(GetMaskProviderConstructorBodyRoslyn());
 
             //fill trees
-            for (int i = 0; i < ComponentsCount(); i++)
+            for (int i = 0; i < ComponentsCountRoslyn(); i++)
             {
                 maskDefault.Add(new CompositeSyntax(new TabSpaceSyntax(4), new SimpleSyntax($"Mask0{i + 1} = 0,"), new ParagraphSyntax()));
                 equalityBody.Add(new SimpleSyntax($"{CParse.Space}&& mask.Mask0{i + 1} == otherMask.Mask0{i + 1}"));
@@ -898,11 +899,6 @@ namespace HECSFramework.Core.Generator
         }
         #endregion
 
-
-
-
-
-
         #region Resolvers
         public List<(string name, string content)> GetSerializationResolvers()
         {
@@ -974,95 +970,172 @@ namespace HECSFramework.Core.Generator
             tree.Add(GetOutToEntityVoidBodyRoslyn(c));
             tree.Add(new RightScopeSyntax(2));
 
-            tree.Add(new TabSimpleSyntax(2, $"public void Out(ref {c.Name} {c.Name.ToLower()})"));
+            tree.Add(new TabSimpleSyntax(2, $"public void Out(ref {name} {name.ToLower()})"));
             tree.Add(new LeftScopeSyntax(2));
             tree.Add(outFunc);
             tree.Add(new RightScopeSyntax(2));
             tree.Add(new RightScopeSyntax(1));
             tree.Add(new RightScopeSyntax());
 
-            ((c.Members.ToArray()[0] as FieldDeclarationSyntax).AttributeLists.ToArray()[0].Attributes.ToArray()[0] as AttributeSyntax).ArgumentList.Arguments.ToArray()[0].ToString()
+            //((c.Members.ToArray()[0] as FieldDeclarationSyntax).AttributeLists.ToArray()[0].Attributes.ToArray()[0] as AttributeSyntax).ArgumentList.Arguments.ToArray()[0].ToString()
+            var typeFields = new List<GatheredField>(128);
 
-                foreach (var m in c.Members)
+            foreach (var m in c.Members)
             {
-                if (m is FieldDeclarationSyntax declarationSyntax || m is PropertyDeclarationSyntax propertyDeclaration)
+                if (m is FieldDeclarationSyntax field)
                 {
-                    declarationSyntax.AttributeLists
-                }
-            }
+                    var validate = IsValidField(field);
 
-            var typeFields = c.GetFields(BindingFlags.Public | BindingFlags.Instance);
-            var typeProperties = c.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-            int count = 0;
-
-            List<(string type, string name)> fieldsForConstructor = new List<(string type, string name)>();
-
-            foreach (var f in typeFields)
-            {
-                var attr = f.GetCustomAttribute<FieldAttribute>();
-
-                if (attr != null)
-                {
-                    fields.Add(new TabSimpleSyntax(2, $"[Key({count})]"));
-                    fields.Add(new TabSimpleSyntax(2, $"public {f.FieldType.Name} {f.Name};"));
-
-                    fieldsForConstructor.Add((f.FieldType.Name, f.Name));
-
-                    constructor.Add(new TabSimpleSyntax(3, $"this.{f.Name} = {c.Name.ToLower()}.{f.Name};"));
-                    outFunc.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.{f.Name} = this.{f.Name};"));
-                    count++;
-                }
-            }
-
-            var react = typeof(ReactiveValue<>);
-
-            foreach (var property in typeProperties)
-            {
-                var attr = property.GetCustomAttribute<FieldAttribute>();
-
-                if (attr != null)
-                {
-                    if (property.PropertyType.Name.Contains("ReactiveValue"))
+                    if (validate.valid)
                     {
-                        var generics = property.PropertyType.GenericTypeArguments;
-
-                        fields.Add(new TabSimpleSyntax(2, $"[Key({attr.Queue})]"));
-                        fields.Add(new TabSimpleSyntax(2, $"public {generics[0].Name} {property.Name};"));
-                        fieldsForConstructor.Add((generics[0].Name, property.Name));
-
-
-                        constructor.Add(new TabSimpleSyntax(3, $"this.{property.Name} = {c.Name.ToLower()}.{property.Name}.CurrentValue;"));
-                        outFunc.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.{property.Name}.CurrentValue = this.{property.Name};"));
-
-                        count++;
-                        continue;
+                        typeFields.Add(new GatheredField
+                        {
+                            Order = validate.Order,
+                            Type = field.Declaration.Type.ToString(),
+                            FieldName = field.Declaration.Variables[0].Identifier.ToString()
+                        });
                     }
+                }
 
-                    if (property.CanWrite)
+                if (m is PropertyDeclarationSyntax property)
+                {
+                    var validate = IsValidProperty(property);
+
+                    if (validate.valid)
                     {
-                        var setTest = property.SetMethod;
-
-                        fields.Add(new TabSimpleSyntax(2, $"[Key({attr.Queue})]"));
-                        fields.Add(new TabSimpleSyntax(2, $"public {property.PropertyType.Name} {property.Name};"));
-                        fieldsForConstructor.Add((property.PropertyType.Name, property.Name));
-
-                        constructor.Add(new TabSimpleSyntax(3, $"this.{property.Name} = {c.Name.ToLower()}.{property.Name};"));
-                        outFunc.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.{property.Name} = this.{property.Name};"));
+                        typeFields.Add(new GatheredField
+                        {
+                            Order = validate.Order,
+                            Type = property.Type.ToString(),
+                            FieldName = property.Identifier.ToString()
+                        });
                     }
-
-                    count++;
                 }
             }
 
-            if (c.BaseList.ChildNodes().Any(x => x is SimpleBaseTypeSyntax simple && simple.ToString().Contains("IAfterSerializationComponent")))
-            {
-                outFunc.Add(new TabSimpleSyntax(3, $"{c.Identifier.ValueText.ToLower()}.AfterSync();"));
-            }
+            //var typeFields = c.GetFields(BindingFlags.Public | BindingFlags.Instance);
+            //var typeProperties = c.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+            //int count = 0;
 
-            //defaultConstructor.Add(DefaultConstructor(c, fieldsForConstructor, fields, constructor));
-            constructor.Add(new TabSimpleSyntax(3, "return this;"));
+            //List<(string type, string name)> fieldsForConstructor = new List<(string type, string name)>();
+
+            //foreach (var f in typeFields)
+            //{
+            //    var attr = f.GetCustomAttribute<FieldAttribute>();
+
+            //    if (attr != null)
+            //    {
+            //        fields.Add(new TabSimpleSyntax(2, $"[Key({count})]"));
+            //        fields.Add(new TabSimpleSyntax(2, $"public {f.FieldType.Name} {f.Name};"));
+
+            //        fieldsForConstructor.Add((f.FieldType.Name, f.Name));
+
+            //        constructor.Add(new TabSimpleSyntax(3, $"this.{f.Name} = {c.Name.ToLower()}.{f.Name};"));
+            //        outFunc.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.{f.Name} = this.{f.Name};"));
+            //        count++;
+            //    }
+            //}
+
+            //var react = typeof(ReactiveValue<>);
+
+            //foreach (var property in typeProperties)
+            //{
+            //    var attr = property.GetCustomAttribute<FieldAttribute>();
+
+            //    if (attr != null)
+            //    {
+            //        if (property.PropertyType.Name.Contains("ReactiveValue"))
+            //        {
+            //            var generics = property.PropertyType.GenericTypeArguments;
+
+            //            fields.Add(new TabSimpleSyntax(2, $"[Key({attr.Queue})]"));
+            //            fields.Add(new TabSimpleSyntax(2, $"public {generics[0].Name} {property.Name};"));
+            //            fieldsForConstructor.Add((generics[0].Name, property.Name));
+
+
+            //            constructor.Add(new TabSimpleSyntax(3, $"this.{property.Name} = {c.Name.ToLower()}.{property.Name}.CurrentValue;"));
+            //            outFunc.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.{property.Name}.CurrentValue = this.{property.Name};"));
+
+            //            count++;
+            //            continue;
+            //        }
+
+            //        if (property.CanWrite)
+            //        {
+            //            var setTest = property.SetMethod;
+
+            //            fields.Add(new TabSimpleSyntax(2, $"[Key({attr.Queue})]"));
+            //            fields.Add(new TabSimpleSyntax(2, $"public {property.PropertyType.Name} {property.Name};"));
+            //            fieldsForConstructor.Add((property.PropertyType.Name, property.Name));
+
+            //            constructor.Add(new TabSimpleSyntax(3, $"this.{property.Name} = {c.Name.ToLower()}.{property.Name};"));
+            //            outFunc.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.{property.Name} = this.{property.Name};"));
+            //        }
+
+            //        count++;
+            //    }
+            //}
+
+            //if (c.BaseList.ChildNodes().Any(x => x is SimpleBaseTypeSyntax simple && simple.ToString().Contains("IAfterSerializationComponent")))
+            //{
+            //    outFunc.Add(new TabSimpleSyntax(3, $"{c.Identifier.ValueText.ToLower()}.AfterSync();"));
+            //}
+
+            ////defaultConstructor.Add(DefaultConstructor(c, fieldsForConstructor, fields, constructor));
+            //constructor.Add(new TabSimpleSyntax(3, "return this;"));
 
             return tree;
+        }
+
+        public (bool valid, int Order) IsValidField(FieldDeclarationSyntax fieldDeclarationSyntax)
+        {
+            foreach (var a in fieldDeclarationSyntax.AttributeLists.SelectMany(x => x.Attributes).ToArray())
+            {
+                if (a.ToString().Contains("Field") && fieldDeclarationSyntax.Modifiers.ToString().Contains("public"))
+                {
+                    var intValue = int.Parse(a.ArgumentList.Arguments.ToArray()[0].ToString());
+                    Console.WriteLine("нашли что надо");
+                    return (true, intValue);
+                }
+            }
+
+            return (false, -1);
+        }
+
+        public (bool valid, int Order) IsValidProperty(PropertyDeclarationSyntax property)
+        {
+            if (!property.Modifiers.ToString().Contains("public"))
+                return (false, -1);
+
+            if (property.AccessorList == null)
+                return (false, -1);
+
+            var needed = property.AccessorList.Accessors.FirstOrDefault(x => x.Kind() == SyntaxKind.SetAccessorDeclaration);
+
+            if (needed == null)
+                return (false, -1);
+
+            if (needed.Modifiers.Any(x => x.Kind() == SyntaxKind.ProtectedKeyword || x.Kind() == SyntaxKind.PrivateKeyword))
+                return (false, -1);
+
+            foreach (var a in property.AttributeLists.SelectMany(x => x.Attributes).ToArray())
+            {
+                if (a.ToString().Contains("Field") && property.Modifiers.ToString().Contains("public"))
+                {
+                    var intValue = int.Parse(a.ArgumentList.Arguments.ToArray()[0].ToString());
+                    Console.WriteLine("нашли что надо");
+                    return (true, intValue);
+                }
+            }
+
+            return (false, -1);
+        }
+
+        public struct GatheredField
+        {
+            public string Type;
+            public string FieldName;
+            public int Order;
         }
 
         private ISyntax GetOutToEntityVoidBodyRoslyn(ClassDeclarationSyntax c)
@@ -1181,7 +1254,7 @@ namespace HECSFramework.Core.Generator
             {
                 var name = container.Identifier.ValueText;
                 caseBody.Add(new TabSimpleSyntax(4, $"case {IndexGenerator.GetIndexForType(name)}:"));
-                caseBody.Add(new TabSimpleSyntax(5, $"var {name}{Resolver.ToLower()} = ({name+ Resolver})dataContainerForResolving.Data;"));
+                caseBody.Add(new TabSimpleSyntax(5, $"var {name}{Resolver.ToLower()} = ({name + Resolver})dataContainerForResolving.Data;"));
                 caseBody.Add(new TabSimpleSyntax(5, $"var {name}component = ({name})entity.Get{name}();"));
                 caseBody.Add(new TabSimpleSyntax(5, $"{name}{Resolver.ToLower()}.Out(ref {name}component);"));
                 caseBody.Add(new TabSimpleSyntax(5, $"break;"));
@@ -1210,7 +1283,7 @@ namespace HECSFramework.Core.Generator
                 var name = container.Identifier.ValueText;
                 caseBody.Add(new TabSimpleSyntax(4, $"case {IndexGenerator.GetIndexForType(name)}:"));
                 caseBody.Add(new TabSimpleSyntax(5, $"var {name}new = new {name}();"));
-                caseBody.Add(new TabSimpleSyntax(5, $"var {name}data = ({name+ Resolver})(resolverDataContainer.Data);"));
+                caseBody.Add(new TabSimpleSyntax(5, $"var {name}data = ({name + Resolver})(resolverDataContainer.Data);"));
                 caseBody.Add(new TabSimpleSyntax(5, $"{name}data.Out(ref {name}new);"));
                 caseBody.Add(new TabSimpleSyntax(5, $"return {name}new;"));
             }
