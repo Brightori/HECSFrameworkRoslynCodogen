@@ -5,8 +5,6 @@ using RoslynHECS;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace HECSFramework.Core.Generator
 {
@@ -18,6 +16,7 @@ namespace HECSFramework.Core.Generator
         public const string Resolver = "Resolver";
         public const string Cs = ".cs";
         private string ResolverContainer = "ResolverDataContainer";
+        public const string BluePrint = "BluePrint";
 
         #region SystemsBinding
         public string GetSystemBindsByRoslyn()
@@ -621,7 +620,6 @@ namespace HECSFramework.Core.Generator
 
         #endregion
 
-
         #region GenerateComponentMask
         public string GenerateMaskProviderRoslyn()
         {
@@ -906,7 +904,9 @@ namespace HECSFramework.Core.Generator
 
             foreach (var c in Program.componentsDeclarations)
             {
-                var attr2 = c.AttributeLists;
+                var needContinue = false;
+                var neededClasses = Program.classes.Where(x => x.Identifier.ValueText == c.Identifier.ValueText);
+                var attr2 = neededClasses.SelectMany(x => x.AttributeLists).ToList();
 
                 if (attr2 != null)
                 {
@@ -917,11 +917,15 @@ namespace HECSFramework.Core.Generator
                             if (a.Name.ToString() == "CustomResolver")
                             {
                                 containersSolve.Add(c);
-                                continue;
+                                needContinue = true;
+                                break;
                             }
                         }
                     }
                 }
+
+                if (needContinue)
+                    continue;
 
                 containersSolve.Add(c);
                 needResolver.Add(c);
@@ -979,6 +983,7 @@ namespace HECSFramework.Core.Generator
 
             //((c.Members.ToArray()[0] as FieldDeclarationSyntax).AttributeLists.ToArray()[0].Attributes.ToArray()[0] as AttributeSyntax).ArgumentList.Arguments.ToArray()[0].ToString()
             var typeFields = new List<GatheredField>(128);
+            List<(string type, string name)> fieldsForConstructor = new List<(string type, string name)>();
 
             foreach (var m in c.Members)
             {
@@ -992,7 +997,8 @@ namespace HECSFramework.Core.Generator
                         {
                             Order = validate.Order,
                             Type = field.Declaration.Type.ToString(),
-                            FieldName = field.Declaration.Variables[0].Identifier.ToString()
+                            FieldName = field.Declaration.Variables[0].Identifier.ToString(),
+                            Node = field
                         });
                     }
                 }
@@ -1007,82 +1013,32 @@ namespace HECSFramework.Core.Generator
                         {
                             Order = validate.Order,
                             Type = property.Type.ToString(),
-                            FieldName = property.Identifier.ToString()
+                            FieldName = property.Identifier.ToString(), 
+                            Node = property
                         });
                     }
                 }
             }
 
-            //var typeFields = c.GetFields(BindingFlags.Public | BindingFlags.Instance);
-            //var typeProperties = c.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-            //int count = 0;
+            foreach (var f in typeFields)
+            {
+                
+                    fields.Add(new TabSimpleSyntax(2, $"[Key({f.Order})]"));
+                    fields.Add(new TabSimpleSyntax(2, $"public {f.Type} {f.FieldName};"));
 
-            //List<(string type, string name)> fieldsForConstructor = new List<(string type, string name)>();
+                    fieldsForConstructor.Add((f.Type, f.FieldName));
 
-            //foreach (var f in typeFields)
-            //{
-            //    var attr = f.GetCustomAttribute<FieldAttribute>();
+                    constructor.Add(new TabSimpleSyntax(3, $"this.{f.FieldName} = {c.Identifier.ValueText.ToLower()}.{f.FieldName};"));
+                    outFunc.Add(new TabSimpleSyntax(3, $"{c.Identifier.ValueText.ToLower()}.{f.FieldName} = this.{f.FieldName};"));
+            }
 
-            //    if (attr != null)
-            //    {
-            //        fields.Add(new TabSimpleSyntax(2, $"[Key({count})]"));
-            //        fields.Add(new TabSimpleSyntax(2, $"public {f.FieldType.Name} {f.Name};"));
-
-            //        fieldsForConstructor.Add((f.FieldType.Name, f.Name));
-
-            //        constructor.Add(new TabSimpleSyntax(3, $"this.{f.Name} = {c.Name.ToLower()}.{f.Name};"));
-            //        outFunc.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.{f.Name} = this.{f.Name};"));
-            //        count++;
-            //    }
-            //}
-
-            //var react = typeof(ReactiveValue<>);
-
-            //foreach (var property in typeProperties)
-            //{
-            //    var attr = property.GetCustomAttribute<FieldAttribute>();
-
-            //    if (attr != null)
-            //    {
-            //        if (property.PropertyType.Name.Contains("ReactiveValue"))
-            //        {
-            //            var generics = property.PropertyType.GenericTypeArguments;
-
-            //            fields.Add(new TabSimpleSyntax(2, $"[Key({attr.Queue})]"));
-            //            fields.Add(new TabSimpleSyntax(2, $"public {generics[0].Name} {property.Name};"));
-            //            fieldsForConstructor.Add((generics[0].Name, property.Name));
-
-
-            //            constructor.Add(new TabSimpleSyntax(3, $"this.{property.Name} = {c.Name.ToLower()}.{property.Name}.CurrentValue;"));
-            //            outFunc.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.{property.Name}.CurrentValue = this.{property.Name};"));
-
-            //            count++;
-            //            continue;
-            //        }
-
-            //        if (property.CanWrite)
-            //        {
-            //            var setTest = property.SetMethod;
-
-            //            fields.Add(new TabSimpleSyntax(2, $"[Key({attr.Queue})]"));
-            //            fields.Add(new TabSimpleSyntax(2, $"public {property.PropertyType.Name} {property.Name};"));
-            //            fieldsForConstructor.Add((property.PropertyType.Name, property.Name));
-
-            //            constructor.Add(new TabSimpleSyntax(3, $"this.{property.Name} = {c.Name.ToLower()}.{property.Name};"));
-            //            outFunc.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.{property.Name} = this.{property.Name};"));
-            //        }
-
-            //        count++;
-            //    }
-            //}
-
-            //if (c.BaseList.ChildNodes().Any(x => x is SimpleBaseTypeSyntax simple && simple.ToString().Contains("IAfterSerializationComponent")))
-            //{
-            //    outFunc.Add(new TabSimpleSyntax(3, $"{c.Identifier.ValueText.ToLower()}.AfterSync();"));
-            //}
+            if (c.BaseList.ChildNodes().Any(x => x is SimpleBaseTypeSyntax simple && simple.ToString().Contains("IAfterSerializationComponent")))
+            {
+                outFunc.Add(new TabSimpleSyntax(3, $"{c.Identifier.ValueText.ToLower()}.AfterSync();"));
+            }
 
             ////defaultConstructor.Add(DefaultConstructor(c, fieldsForConstructor, fields, constructor));
-            //constructor.Add(new TabSimpleSyntax(3, "return this;"));
+            constructor.Add(new TabSimpleSyntax(3, "return this;"));
 
             return tree;
         }
@@ -1093,6 +1049,9 @@ namespace HECSFramework.Core.Generator
             {
                 if (a.ToString().Contains("Field") && fieldDeclarationSyntax.Modifiers.ToString().Contains("public"))
                 {
+                    if (a.ArgumentList == null)
+                        continue;
+
                     var intValue = int.Parse(a.ArgumentList.Arguments.ToArray()[0].ToString());
                     Console.WriteLine("нашли что надо");
                     return (true, intValue);
@@ -1107,16 +1066,22 @@ namespace HECSFramework.Core.Generator
             if (!property.Modifiers.ToString().Contains("public"))
                 return (false, -1);
 
-            if (property.AccessorList == null)
-                return (false, -1);
+            if (property.Type.ToString().Contains("ReactiveValue"))
+            {
+            }
+            else
+            {
+                if (property.AccessorList == null)
+                    return (false, -1);
 
-            var needed = property.AccessorList.Accessors.FirstOrDefault(x => x.Kind() == SyntaxKind.SetAccessorDeclaration);
+                var needed = property.AccessorList.Accessors.FirstOrDefault(x => x.Kind() == SyntaxKind.SetAccessorDeclaration);
 
-            if (needed == null)
-                return (false, -1);
+                if (needed == null)
+                    return (false, -1);
 
-            if (needed.Modifiers.Any(x => x.Kind() == SyntaxKind.ProtectedKeyword || x.Kind() == SyntaxKind.PrivateKeyword))
-                return (false, -1);
+                if (needed.Modifiers.Any(x => x.Kind() == SyntaxKind.ProtectedKeyword || x.Kind() == SyntaxKind.PrivateKeyword))
+                    return (false, -1);
+            }
 
             foreach (var a in property.AttributeLists.SelectMany(x => x.Attributes).ToArray())
             {
@@ -1136,6 +1101,7 @@ namespace HECSFramework.Core.Generator
             public string Type;
             public string FieldName;
             public int Order;
+            public CSharpSyntaxNode Node;
         }
 
         private ISyntax GetOutToEntityVoidBodyRoslyn(ClassDeclarationSyntax c)
@@ -1193,7 +1159,6 @@ namespace HECSFramework.Core.Generator
         }
 
         #endregion
-
 
         #region  ResolversMap
         public string GetResolverMap()
@@ -1381,6 +1346,140 @@ namespace HECSFramework.Core.Generator
         }
         #endregion
 
+        #region BluePrintsProvider
+        public string GetBluePrintsProvider()
+        {
+            var tree = new TreeSyntaxNode();
+            var constructor = new TreeSyntaxNode();
+
+            tree.Add(new UsingSyntax("Components"));
+            tree.Add(new UsingSyntax("System"));
+            tree.Add(new UsingSyntax("Systems"));
+            tree.Add(new UsingSyntax("System.Collections.Generic", 1));
+            tree.Add(new NameSpaceSyntax("HECSFramework.Unity"));
+            tree.Add(new LeftScopeSyntax());
+            tree.Add(new TabSimpleSyntax(1, "public partial class BluePrintsProvider"));
+            tree.Add(new LeftScopeSyntax(1));
+            tree.Add(new TabSimpleSyntax(2, "public BluePrintsProvider()"));
+            tree.Add(new LeftScopeSyntax(2));
+            tree.Add(constructor);
+            tree.Add(new RightScopeSyntax(2));
+            tree.Add(new RightScopeSyntax(1));
+            tree.Add(new RightScopeSyntax());
+
+            constructor.Add(GetComponentsBluePrintsDictionary());
+            constructor.Add(GetSystemsBluePrintsDictionary());
+
+            return tree.ToString();
+        }
+
+        private ISyntax GetComponentsBluePrintsDictionary()
+        {
+            var tree = new TreeSyntaxNode();
+            var dictionaryBody = new TreeSyntaxNode();
+
+            tree.Add(new TabSimpleSyntax(2, "Components = new Dictionary<Type, Type>"));
+            tree.Add(new LeftScopeSyntax(2));
+            tree.Add(dictionaryBody);
+            tree.Add(new RightScopeSyntax(2, true));
+
+            foreach (var c in Program.componentsDeclarations)
+            {
+                var name = c.Identifier.ValueText;
+                dictionaryBody.Add(new TabSimpleSyntax(3, $" {CParse.LeftScope} typeof({name}), typeof({name}{BluePrint}) {CParse.RightScope},"));
+            }
+
+            return tree;
+        }
+
+        private ISyntax GetSystemsBluePrintsDictionary()
+        {
+            var tree = new TreeSyntaxNode();
+            var dictionaryBody = new TreeSyntaxNode();
+
+            tree.Add(new ParagraphSyntax());
+            tree.Add(new TabSimpleSyntax(2, "Systems = new Dictionary<Type, Type>"));
+            tree.Add(new LeftScopeSyntax(2));
+            tree.Add(dictionaryBody);
+            tree.Add(new RightScopeSyntax(2, true));
+
+            foreach (var s in Program.systemsDeclarations)
+            {
+                var name = s.Identifier.ValueText;
+                dictionaryBody.Add(new TabSimpleSyntax(3, $" {CParse.LeftScope} typeof({name}), typeof({name}{BluePrint}) {CParse.RightScope},"));
+            }
+
+            return tree;
+        }
+        #endregion
+
+        #region GenerateSystemsBluePrints
+        public List<(string name, string classBody)> GenerateSystemsBluePrints()
+        {
+            var list = new List<(string name, string classBody)>();
+
+            foreach (var c in Program.systemsDeclarations)
+            {
+                var name = c.Identifier.ValueText;
+                list.Add((name + BluePrint + ".cs", GetSystemBluePrint(c)));
+            }
+                
+
+            return list;
+        }
+
+        private string GetSystemBluePrint(ClassDeclarationSyntax type)
+        {
+            var tree = new TreeSyntaxNode();
+            tree.Add(new UsingSyntax("Systems", 1));
+
+            tree.Add(new NameSpaceSyntax("HECSFramework.Unity"));
+            tree.Add(new LeftScopeSyntax());
+            tree.Add(new TabSimpleSyntax(1, $"public class {type.Identifier.ValueText}{BluePrint} : SystemBluePrint<{type.Identifier.ValueText}>"));
+            tree.Add(new LeftScopeSyntax(1));
+            tree.Add(new RightScopeSyntax(1));
+            tree.Add(new RightScopeSyntax());
+
+            return tree.ToString();
+        }
+
+        #endregion
+
+        #region GenerateComponentsBluePrints  
+        public List<(string name, string classBody)> GenerateComponentsBluePrints()
+        {
+            var list = new List<(string name, string classBody)>();
+
+            foreach (var c in Program.componentsDeclarations)
+            {
+                var name = c.Identifier.ValueText;
+                list.Add((name + BluePrint + ".cs", GetComponentBluePrint(c)));
+            }
+                
+
+            return list;
+        }
+
+        private string GetComponentBluePrint(ClassDeclarationSyntax type)
+        {
+            var tree = new TreeSyntaxNode();
+            tree.Add(new UsingSyntax("Components"));
+            tree.Add(new UsingSyntax("System"));
+            tree.Add(new UsingSyntax("System.Collections.Generic", 1));
+
+            tree.Add(new NameSpaceSyntax("HECSFramework.Unity"));
+            tree.Add(new LeftScopeSyntax());
+            tree.Add(new TabSimpleSyntax(1, $"public class {type.Identifier.ValueText}{BluePrint} : ComponentBluePrintContainer<{type.Identifier.ValueText}>"));
+            tree.Add(new LeftScopeSyntax(1));
+            tree.Add(new RightScopeSyntax(1));
+            tree.Add(new RightScopeSyntax());
+
+            return tree.ToString();
+        }
+
+
+
+        #endregion
 
         #region Helpers
         private int ComponentsCountRoslyn()
