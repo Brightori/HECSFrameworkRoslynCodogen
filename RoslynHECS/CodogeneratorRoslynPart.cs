@@ -943,6 +943,7 @@ namespace HECSFramework.Core.Generator
         private ISyntax GetResolver(ClassDeclarationSyntax c)
         {
             var tree = new TreeSyntaxNode();
+            var usings = new TreeSyntaxNode();
             var fields = new TreeSyntaxNode();
             var constructor = new TreeSyntaxNode();
             var defaultConstructor = new TreeSyntaxNode();
@@ -950,10 +951,11 @@ namespace HECSFramework.Core.Generator
             var out2EntityFunc = new TreeSyntaxNode();
 
             var name = c.Identifier.ValueText;
-
-            tree.Add(new UsingSyntax("Components"));
-            tree.Add(new UsingSyntax("System"));
-            tree.Add(new UsingSyntax("MessagePack", 1));
+            
+            tree.Add(usings);
+            usings.Add(new UsingSyntax("Components"));
+            usings.Add(new UsingSyntax("System"));
+            usings.Add(new UsingSyntax("MessagePack"));
 
             tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
             tree.Add(new LeftScopeSyntax());
@@ -987,12 +989,23 @@ namespace HECSFramework.Core.Generator
 
             foreach (var m in c.Members)
             {
+               
+
                 if (m is FieldDeclarationSyntax field)
                 {
                     var validate = IsValidField(field);
 
                     if (validate.valid)
                     {
+                        var getNameSpace = GetNameSpace(field);
+                        var getListNameSpace = GetListNameSpace(field);
+
+                        if (getListNameSpace != string.Empty)
+                            AddUniqueSyntax(usings, new UsingSyntax(getListNameSpace));
+
+                        if (getNameSpace != string.Empty)
+                            AddUniqueSyntax(usings, new UsingSyntax(getNameSpace));
+
                         typeFields.Add(new GatheredField
                         {
                             Order = validate.Order,
@@ -1009,6 +1022,8 @@ namespace HECSFramework.Core.Generator
 
                     if (validate.valid)
                     {
+                        
+
                         typeFields.Add(new GatheredField
                         {
                             Order = validate.Order,
@@ -1040,6 +1055,7 @@ namespace HECSFramework.Core.Generator
             ////defaultConstructor.Add(DefaultConstructor(c, fieldsForConstructor, fields, constructor));
             constructor.Add(new TabSimpleSyntax(3, "return this;"));
 
+            usings.Add(new ParagraphSyntax());
             return tree;
         }
 
@@ -1059,6 +1075,39 @@ namespace HECSFramework.Core.Generator
             }
 
             return (false, -1);
+        }
+
+        private string GetNameSpace(FieldDeclarationSyntax field)
+        {
+            var neededClass = Program.classes.FirstOrDefault(x => x.Identifier.ValueText == field.Declaration.Type.ToString());
+            var namespaceString = string.Empty;
+
+            if (neededClass == null)
+                return namespaceString;
+
+            var tree = neededClass.SyntaxTree.GetRoot().ChildNodes();
+
+            foreach (var cn in tree)
+            {
+                if (cn is NamespaceDeclarationSyntax declarationSyntax)
+                {
+                    var namespaceName = declarationSyntax.Name.ToString();
+                    namespaceString = namespaceName;
+                    break;
+                }
+            }
+
+            return namespaceString;
+        }
+
+        private string GetListNameSpace(FieldDeclarationSyntax field)
+        {
+            var namespaceString = string.Empty;
+
+            if (field.Declaration.Type.ToString().Contains("List"))
+                namespaceString = "System.Collections.Generic";
+
+            return namespaceString;
         }
 
         public (bool valid, int Order) IsValidProperty(PropertyDeclarationSyntax property)
@@ -1482,6 +1531,15 @@ namespace HECSFramework.Core.Generator
         #endregion
 
         #region Helpers
+
+        private void AddUniqueSyntax(ISyntax syntaxTo, ISyntax from)
+        {
+            if (syntaxTo.ToString().Contains(from.ToString()))
+                return;
+
+            syntaxTo.Tree.Add(from);
+        }
+
         private int ComponentsCountRoslyn()
         {
             double count = Program.componentsDeclarations.Count;
