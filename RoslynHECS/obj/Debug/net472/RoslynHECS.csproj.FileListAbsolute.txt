@@ -244,3 +244,4 @@ D:\Develop\HECSFrameworkRoslynCodogen\RoslynHECS\bin\Debug\net472\tr\Microsoft.C
 D:\Develop\HECSFrameworkRoslynCodogen\RoslynHECS\bin\Debug\net472\zh-Hans\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll
 D:\Develop\HECSFrameworkRoslynCodogen\RoslynHECS\bin\Debug\net472\zh-Hant\Microsoft.CodeAnalysis.Workspaces.MSBuild.resources.dll
 D:\Develop\HECSFrameworkRoslynCodogen\RoslynHECS\obj\Debug\net472\RoslynHECS.csproj.CopyComplete
+D:\Develop\HECSFrameworkRoslynCodogen\RoslynHECS\obj\Debug\net472\RoslynHECS.GeneratedMSBuildEditorConfig.editorconfig

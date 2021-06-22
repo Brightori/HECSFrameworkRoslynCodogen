@@ -25,9 +25,9 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> localCommands = new List<StructDeclarationSyntax>(256);
         public static List<ClassDeclarationSyntax> classes;
         private static List<StructDeclarationSyntax> structs;
-        public const string AssetPath = @"D:\Develop\CyberMafia\Assets\";
-        public const string HECSGenerated = @"\Scripts\HECSGenerated\";
-        public const string SolutionPath = @"D:\Develop\CyberMafia\CyberMafia.sln";
+        public const string AssetPath = @"D:\Develop\HECSServerV2\HECSServer\HECSGenerated";
+        public const string HECSGenerated = @"";
+        public const string SolutionPath = @"D:\Develop\HECSServerV2\";
 
 
         private const string TypeProvider = "TypeProvider.cs";
@@ -49,62 +49,40 @@ namespace RoslynHECS
 
         static async Task Main(string[] args)
         {
-            // Attempt to set the version of MSBuild.
-            var visualStudioInstances = MSBuildLocator.QueryVisualStudioInstances().ToArray();
-            var instance = visualStudioInstances.Length == 1
-                // If there is only one instance of MSBuild on this machine, set that as the one to use.
-                ? visualStudioInstances[0]
-                // Handle selecting the version of MSBuild you want to use.
-                : SelectVisualStudioInstance(visualStudioInstances);
+            var files = new DirectoryInfo(SolutionPath).GetFiles("*.cs", SearchOption.AllDirectories);
+            var list = new List<SyntaxTree>();
 
-            Console.WriteLine($"Using MSBuild at '{instance.MSBuildPath}' to load projects.");
-
-            // NOTE: Be sure to register an instance with the MSBuildLocator 
-            //       before calling MSBuildWorkspace.Create()
-            //       otherwise, MSBuildWorkspace won't MEF compose.
-            MSBuildLocator.RegisterInstance(instance);
-
-            using (var workspace = MSBuildWorkspace.Create())
+            foreach (var f in files)
             {
-                // Print message for WorkspaceFailed event to help diagnosing project load failures.
-                workspace.WorkspaceFailed += (o, e) => Console.WriteLine(e.Diagnostic.Message);
-
-                
-                Console.WriteLine($"Loading solution '{SolutionPath}'");
-
-                // Attach progress reporter so we print projects as they are loaded.
-                var solution = await workspace.OpenSolutionAsync(SolutionPath, new ConsoleProgressReporter());
-                Console.WriteLine($"Finished loading solution '{SolutionPath}'");
-
-                var compilations = await Task.WhenAll(solution.Projects.Select(x => x.GetCompilationAsync()));
-
-                // TODO: Do analysis on the projects in the loaded solution
-
-                var classVisitor = new ClassVirtualizationVisitor();
-                var structVisitor = new StructVirtualizationVisitor();
-
-                foreach (var compilation in compilations)
+                if (f.Extension == ".cs")
                 {
-                    foreach (var syntaxTree in compilation.SyntaxTrees)
-                    {
-                        classVisitor.Visit(syntaxTree.GetRoot());
-                        structVisitor.Visit(syntaxTree.GetRoot());
-                    }
+                    var s = File.ReadAllText(f.FullName);
+                    var syntaxTree = CSharpSyntaxTree.ParseText(s);
+                    list.Add(syntaxTree);
                 }
-
-                classes = classVisitor.Classes;
-                structs = structVisitor.Structs;
-
-                foreach (var c in classes)
-                    ProcessClasses(c);
-
-                foreach (var s in structs)
-                    ProcessStructs(s);
-
-                SaveFiles();
-
-                Console.WriteLine("нашли компоненты " + components.Count);
             }
+
+            var classVisitor = new ClassVirtualizationVisitor();
+            var structVisitor = new StructVirtualizationVisitor();
+
+            foreach (var syntaxTree in list)
+            {
+                classVisitor.Visit(syntaxTree.GetRoot());
+                structVisitor.Visit(syntaxTree.GetRoot());
+            }
+
+            classes = classVisitor.Classes;
+            structs = structVisitor.Structs;
+
+            foreach (var c in classes)
+                ProcessClasses(c);
+
+            foreach (var s in structs)
+                ProcessStructs(s);
+
+            SaveFiles();
+
+            Console.WriteLine("нашли компоненты " + components.Count);
         }
 
         private static void SaveFiles()
@@ -115,7 +93,7 @@ namespace RoslynHECS
             SaveToFile(SystemBindings, processGeneration.GetSystemBindsByRoslyn());
             SaveToFile(ComponentContext, processGeneration.GetComponentContextRoslyn());
             SaveToFile(HecsMasks, processGeneration.GenerateHecsMasksRoslyn());
-            
+
             if (resolversNeeded)
             {
                 var path = AssetPath + HECSGenerated + "Resolvers/";
@@ -127,7 +105,7 @@ namespace RoslynHECS
                 foreach (var c in resolvers)
                     SaveToFile(c.name, c.content, path);
             }
-            
+
             if (bluePrintsNeeded)
             {
                 var componetsBPFiles = processGeneration.GenerateComponentsBluePrints();
@@ -163,7 +141,7 @@ namespace RoslynHECS
             }
         }
 
-        private static void SaveToFile(string name, string data, string pathToDirectory = AssetPath+HECSGenerated, bool needToImport = false)
+        private static void SaveToFile(string name, string data, string pathToDirectory = AssetPath + HECSGenerated, bool needToImport = false)
         {
             var path = pathToDirectory + name;
 
@@ -188,8 +166,8 @@ namespace RoslynHECS
             {
                 globalCommands.Add(s);
                 Console.WriteLine("нашли глобальную команду " + structCurrent);
-            } 
-            
+            }
+
             if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains(typeof(ICommand).Name)))
             {
                 localCommands.Add(s);
@@ -221,7 +199,7 @@ namespace RoslynHECS
                 componentsDeclarations.Add(c);
                 Console.WriteLine("нашли компонент " + classCurrent);
             }
-            
+
             if (IsSystem(c) && !isAbstract && !classCurrent.Contains("SystemBluePrint"))
             {
                 if (systems.Contains(classCurrent))
@@ -229,7 +207,7 @@ namespace RoslynHECS
 
                 systems.Add(classCurrent);
                 systemsDeclarations.Add(c);
-                
+
                 Console.WriteLine("----");
                 Console.WriteLine("нашли систему " + classCurrent);
             }
@@ -292,8 +270,8 @@ namespace RoslynHECS
                 Classes.Add(node); // save your visited classes
                 return node;
             }
-        }        
-        
+        }
+
         class StructVirtualizationVisitor : CSharpSyntaxRewriter
         {
             public StructVirtualizationVisitor()
