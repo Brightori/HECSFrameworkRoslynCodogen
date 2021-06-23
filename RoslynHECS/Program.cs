@@ -25,10 +25,9 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> localCommands = new List<StructDeclarationSyntax>(256);
         public static List<ClassDeclarationSyntax> classes;
         private static List<StructDeclarationSyntax> structs;
-        public const string AssetPath = @"D:\Develop\HECSServerV2\HECSServer\";
-        public const string HECSGenerated = @"\HECSGenerated\";
-        public const string SolutionPath = @"D:\Develop\HECSServerV2\";
-
+        public const string AssetPath = @"D:\Develop\CyberMafia\Assets\";
+        public const string HECSGenerated = @"\Scripts\HECSGenerated\";
+        public const string SolutionPath = @"D:\Develop\CyberMafia\Assets\";
 
         private const string TypeProvider = "TypeProvider.cs";
         private const string MaskProvider = "MaskProvider.cs";
