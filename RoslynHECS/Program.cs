@@ -25,8 +25,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> localCommands = new List<StructDeclarationSyntax>(256);
         public static List<ClassDeclarationSyntax> classes;
         private static List<StructDeclarationSyntax> structs;
-        public const string AssetPath = @"D:\Develop\HECSServerV2\HECSServer\HECSGenerated";
-        public const string HECSGenerated = @"";
+        public const string AssetPath = @"D:\Develop\HECSServerV2\HECSServer\";
+        public const string HECSGenerated = @"\HECSGenerated\";
         public const string SolutionPath = @"D:\Develop\HECSServerV2\";
 
 
@@ -45,7 +45,7 @@ namespace RoslynHECS
         private const string BaseComponent = "BaseComponent";
 
         private static bool resolversNeeded = true;
-        private static bool bluePrintsNeeded = true;
+        private static bool bluePrintsNeeded = false;
 
         static async Task Main(string[] args)
         {
