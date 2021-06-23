@@ -959,7 +959,7 @@ namespace HECSFramework.Core.Generator
 
             tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
             tree.Add(new LeftScopeSyntax());
-            tree.Add(new TabSimpleSyntax(1, "[MessagePackObject]"));
+            tree.Add(new TabSimpleSyntax(1, "[MessagePackObject, Serializable]"));
             tree.Add(new TabSimpleSyntax(1, $"public struct {name + Resolver} : IResolver<{name}>, IData"));
             tree.Add(new LeftScopeSyntax(1));
             tree.Add(fields);
