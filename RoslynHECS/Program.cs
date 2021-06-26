@@ -25,9 +25,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> localCommands = new List<StructDeclarationSyntax>(256);
         public static List<ClassDeclarationSyntax> classes;
         private static List<StructDeclarationSyntax> structs;
-        public const string AssetPath = @"D:\Develop\CyberMafia\Assets\";
-        public const string HECSGenerated = @"\Scripts\HECSGenerated\";
-        public const string SolutionPath = @"D:\Develop\CyberMafia\Assets\";
+        public const string ScriptsPath = @"D:\Develop\CyberMafia\Assets\";
+        public const string HECSGenerated = @"D:\Develop\CyberMafia\Assets\Scripts\HECSGenerated\";
 
         private const string TypeProvider = "TypeProvider.cs";
         private const string MaskProvider = "MaskProvider.cs";
@@ -44,11 +43,11 @@ namespace RoslynHECS
         private const string BaseComponent = "BaseComponent";
 
         private static bool resolversNeeded = true;
-        private static bool bluePrintsNeeded = false;
+        private static bool bluePrintsNeeded = true;
 
         static async Task Main(string[] args)
         {
-            var files = new DirectoryInfo(SolutionPath).GetFiles("*.cs", SearchOption.AllDirectories);
+            var files = new DirectoryInfo(ScriptsPath).GetFiles("*.cs", SearchOption.AllDirectories);
             var list = new List<SyntaxTree>();
 
             foreach (var f in files)
@@ -95,7 +94,7 @@ namespace RoslynHECS
 
             if (resolversNeeded)
             {
-                var path = AssetPath + HECSGenerated + "Resolvers/";
+                var path = HECSGenerated + @"Resolvers\";
                 var resolvers = processGeneration.GetSerializationResolvers();
                 SaveToFile(MapResolver, processGeneration.GetResolverMap());
 
@@ -110,14 +109,14 @@ namespace RoslynHECS
                 var componetsBPFiles = processGeneration.GenerateComponentsBluePrints();
                 var systemsBPFiles = processGeneration.GenerateSystemsBluePrints();
 
-                CleanDirectory(AssetPath + ComponentsBluePrintsPath);
-                CleanDirectory(AssetPath + SystemsBluePrintsPath);
+                CleanDirectory(ScriptsPath + ComponentsBluePrintsPath);
+                CleanDirectory(ScriptsPath + SystemsBluePrintsPath);
 
                 foreach (var c in componetsBPFiles)
-                    SaveToFile(c.name, c.classBody, AssetPath + ComponentsBluePrintsPath);
+                    SaveToFile(c.name, c.classBody, ScriptsPath + ComponentsBluePrintsPath);
 
                 foreach (var c in systemsBPFiles)
-                    SaveToFile(c.name, c.classBody, AssetPath + SystemsBluePrintsPath);
+                    SaveToFile(c.name, c.classBody, ScriptsPath + SystemsBluePrintsPath);
 
                 SaveToFile(BluePrintsProvider, processGeneration.GetBluePrintsProvider(), needToImport: true);
             }
@@ -140,7 +139,7 @@ namespace RoslynHECS
             }
         }
 
-        private static void SaveToFile(string name, string data, string pathToDirectory = AssetPath + HECSGenerated, bool needToImport = false)
+        private static void SaveToFile(string name, string data, string pathToDirectory = HECSGenerated, bool needToImport = false)
         {
             var path = pathToDirectory + name;
 
