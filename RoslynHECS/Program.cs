@@ -23,10 +23,11 @@ namespace RoslynHECS
         public static List<ClassDeclarationSyntax> systemsDeclarations = new List<ClassDeclarationSyntax>(256);
         public static List<StructDeclarationSyntax> globalCommands = new List<StructDeclarationSyntax>(256);
         public static List<StructDeclarationSyntax> localCommands = new List<StructDeclarationSyntax>(256);
+        public static List<StructDeclarationSyntax> networkCommands = new List<StructDeclarationSyntax>(256);
         public static List<ClassDeclarationSyntax> classes;
         private static List<StructDeclarationSyntax> structs;
-        public const string ScriptsPath = @"D:\Develop\CyberMafia\Assets\";
-        public const string HECSGenerated = @"D:\Develop\CyberMafia\Assets\Scripts\HECSGenerated\";
+        public const string ScriptsPath = @"D:\Develop\ClientTest\Assets\";
+        public const string HECSGenerated = @"D:\Develop\ClientTest\Assets\Scripts\HECSGenerated\";
 
         private const string TypeProvider = "TypeProvider.cs";
         private const string MaskProvider = "MaskProvider.cs";
@@ -44,6 +45,7 @@ namespace RoslynHECS
 
         private static bool resolversNeeded = true;
         private static bool bluePrintsNeeded = true;
+        private static bool commandMapneeded = true;
 
         static async Task Main(string[] args)
         {
@@ -102,6 +104,12 @@ namespace RoslynHECS
 
                 foreach (var c in resolvers)
                     SaveToFile(c.name, c.content, path);
+            }
+
+            if (commandMapneeded)
+            {
+                var commandMap = processGeneration.GenerateNetworkCommandsMap(networkCommands);
+                SaveToFile("CommandsMap.cs", commandMap);
             }
 
             if (bluePrintsNeeded)
@@ -169,6 +177,12 @@ namespace RoslynHECS
             if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains(typeof(ICommand).Name)))
             {
                 localCommands.Add(s);
+                Console.WriteLine("нашли локальную команду " + structCurrent);
+            }    
+            
+            if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains("INetworkCommand")))
+            {
+                networkCommands.Add(s);
                 Console.WriteLine("нашли локальную команду " + structCurrent);
             }
         }

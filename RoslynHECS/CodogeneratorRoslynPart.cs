@@ -942,6 +942,9 @@ namespace HECSFramework.Core.Generator
 
         private ISyntax GetResolver(ClassDeclarationSyntax c)
         {
+            var neededClasses = Program.classes.Where(x => x.Identifier.ValueText == c.Identifier.ValueText);
+            var baselist = neededClasses.Select(x => x.BaseList).ToList();
+
             var tree = new TreeSyntaxNode();
             var usings = new TreeSyntaxNode();
             var fields = new TreeSyntaxNode();
@@ -982,6 +985,9 @@ namespace HECSFramework.Core.Generator
             tree.Add(new RightScopeSyntax(2));
             tree.Add(new RightScopeSyntax(1));
             tree.Add(new RightScopeSyntax());
+
+            if (baselist.Any(x=> x != null && x.ChildNodes().Any(z=> z!= null && z.ToString() == "IBeforeSerializationComponent")))
+                constructor.Add(new TabSimpleSyntax(3, $"{c.Identifier.ValueText.ToLower()}.BeforeSync();"));
 
             //((c.Members.ToArray()[0] as FieldDeclarationSyntax).AttributeLists.ToArray()[0].Attributes.ToArray()[0] as AttributeSyntax).ArgumentList.Arguments.ToArray()[0].ToString()
             var typeFields = new List<GatheredField>(128);
@@ -1047,7 +1053,7 @@ namespace HECSFramework.Core.Generator
                     outFunc.Add(new TabSimpleSyntax(3, $"{c.Identifier.ValueText.ToLower()}.{f.FieldName} = this.{f.FieldName};"));
             }
 
-            if (c.BaseList.ChildNodes().Any(x => x is SimpleBaseTypeSyntax simple && simple.ToString().Contains("IAfterSerializationComponent")))
+            if (baselist.Any(x => x != null && x.ChildNodes().Any(z => z!=null && z.ToString() == "IAfterSerializationComponent")))
             {
                 outFunc.Add(new TabSimpleSyntax(3, $"{c.Identifier.ValueText.ToLower()}.AfterSync();"));
             }
@@ -1389,6 +1395,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(new TabSimpleSyntax(3, "GetComponentContainerFunc = GetContainerForComponentFuncProvider;"));
             tree.Add(new TabSimpleSyntax(3, "ProcessResolverContainer = ProcessResolverContainerRealisation;"));
             tree.Add(new TabSimpleSyntax(3, "GetComponentFromContainer = GetComponentFromContainerFuncRealisation;"));
+            tree.Add(new TabSimpleSyntax(3, "InitPartialCommandResolvers();"));
             tree.Add(new RightScopeSyntax(2));
 
             return tree;
@@ -1527,6 +1534,81 @@ namespace HECSFramework.Core.Generator
         }
 
 
+
+        #endregion
+
+        #region CommandsResolvers
+
+
+        public string GenerateNetworkCommandsMap(List<StructDeclarationSyntax> commands)
+        {
+            var tree = new TreeSyntaxNode();
+            var resolvers = new TreeSyntaxNode();
+            var typeToIdDictionary = new TreeSyntaxNode();
+            var dictionaryBody = new TreeSyntaxNode();
+            var genericMethod = new TreeSyntaxNode();
+
+            tree.Add(new UsingSyntax("Commands"));
+            tree.Add(new UsingSyntax("System"));
+            tree.Add(new UsingSyntax("System.Collections.Generic", 1));
+            tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
+            tree.Add(new LeftScopeSyntax());
+            tree.Add(new TabSimpleSyntax(1, "public partial class ResolversMap"));
+            tree.Add(new LeftScopeSyntax(1));
+            tree.Add(new TabSimpleSyntax(2, "public Dictionary<int, ICommandResolver> Map = new Dictionary<int, ICommandResolver>"));
+            tree.Add(new LeftScopeSyntax(2));
+            tree.Add(resolvers);
+            tree.Add(new RightScopeSyntax(2, true));
+            tree.Add(new ParagraphSyntax());
+            tree.Add(typeToIdDictionary);
+            tree.Add(new ParagraphSyntax());
+            tree.Add(InitPartialCommandResolvers());
+            tree.Add(new RightScopeSyntax(1));
+            tree.Add(new RightScopeSyntax(0));
+
+            foreach (var t in commands)
+                resolvers.Add(GetCommandResolver(t));
+
+            typeToIdDictionary.Add(new TabSimpleSyntax(2, "public Dictionary<Type, int> CommandsIDs = new Dictionary<Type, int>"));
+            typeToIdDictionary.Add(new LeftScopeSyntax(2));
+            typeToIdDictionary.Add(dictionaryBody);
+            typeToIdDictionary.Add(new RightScopeSyntax(2, true));
+
+            for (int i = 0; i < commands.Count; i++)
+            {
+                var t = commands[i];
+                dictionaryBody.Add(GetCommandMethod(t));
+
+                //if (i < commands.Count - 1)
+                //    dictionaryBody.Add(new ParagraphSyntax());
+            }
+
+            return tree.ToString();
+        }
+
+        private ISyntax GetCommandMethod(StructDeclarationSyntax command)
+        {
+            var tree = new TreeSyntaxNode();
+            tree.Add(new TabSimpleSyntax(3, $"{{typeof({command.Identifier.ValueText}), {IndexGenerator.GetIndexForType(command.Identifier.ValueText)}}},"));
+            return tree;
+        }
+
+        private ISyntax InitPartialCommandResolvers()
+        {
+            var tree = new TreeSyntaxNode();
+            tree.Add(new TabSimpleSyntax(2, "partial void InitPartialCommandResolvers()"));
+            tree.Add(new LeftScopeSyntax(2));
+            tree.Add(new TabSimpleSyntax(3, "hashTypeToResolver = Map;"));
+            tree.Add(new TabSimpleSyntax(3, "typeTohash = CommandsIDs;"));
+            tree.Add(new RightScopeSyntax(2));
+
+            return tree;
+        }
+
+        private ISyntax GetCommandResolver(StructDeclarationSyntax type)
+        {
+            return new TabSimpleSyntax(3, $"{{{IndexGenerator.GetIndexForType(type.Identifier.ValueText)}, new CommandResolver<{type.Identifier.ValueText}>()}},");
+        }
 
         #endregion
 
