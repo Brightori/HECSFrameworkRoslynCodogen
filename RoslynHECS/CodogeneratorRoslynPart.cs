@@ -993,57 +993,57 @@ namespace HECSFramework.Core.Generator
             var typeFields = new List<GatheredField>(128);
             List<(string type, string name)> fieldsForConstructor = new List<(string type, string name)>();
 
-            foreach (var m in c.Members)
+            foreach (var allClasses in neededClasses)
             {
-               
-
-                if (m is FieldDeclarationSyntax field)
+                foreach (var m in allClasses.Members)
                 {
-                    var validate = IsValidField(field);
-
-                    if (validate.valid)
+                    if (m is FieldDeclarationSyntax field)
                     {
-                        var getNameSpace = GetNameSpace(field);
-                        var getListNameSpace = GetListNameSpace(field);
+                        var validate = IsValidField(field);
 
-                        if (getListNameSpace != string.Empty)
-                            AddUniqueSyntax(usings, new UsingSyntax(getListNameSpace));
-
-                        if (getNameSpace != string.Empty)
-                            AddUniqueSyntax(usings, new UsingSyntax(getNameSpace));
-
-                        typeFields.Add(new GatheredField
+                        if (validate.valid)
                         {
-                            Order = validate.Order,
-                            Type = field.Declaration.Type.ToString(),
-                            FieldName = field.Declaration.Variables[0].Identifier.ToString(),
-                            Node = field
-                        });
+                            var getNameSpace = GetNameSpace(field);
+                            var getListNameSpace = GetListNameSpace(field);
+
+                            if (getListNameSpace != string.Empty)
+                                AddUniqueSyntax(usings, new UsingSyntax(getListNameSpace));
+
+                            if (getNameSpace != string.Empty)
+                                AddUniqueSyntax(usings, new UsingSyntax(getNameSpace));
+
+                            typeFields.Add(new GatheredField
+                            {
+                                Order = validate.Order,
+                                Type = field.Declaration.Type.ToString(),
+                                FieldName = field.Declaration.Variables[0].Identifier.ToString(),
+                                Node = field
+                            });
+                        }
+                    }
+
+                    if (m is PropertyDeclarationSyntax property)
+                    {
+                        var validate = IsValidProperty(property);
+
+                        if (validate.valid)
+                        {
+
+
+                            typeFields.Add(new GatheredField
+                            {
+                                Order = validate.Order,
+                                Type = property.Type.ToString(),
+                                FieldName = property.Identifier.ToString(),
+                                Node = property
+                            });
+                        }
                     }
                 }
 
-                if (m is PropertyDeclarationSyntax property)
+                foreach (var f in typeFields)
                 {
-                    var validate = IsValidProperty(property);
 
-                    if (validate.valid)
-                    {
-                        
-
-                        typeFields.Add(new GatheredField
-                        {
-                            Order = validate.Order,
-                            Type = property.Type.ToString(),
-                            FieldName = property.Identifier.ToString(), 
-                            Node = property
-                        });
-                    }
-                }
-            }
-
-            foreach (var f in typeFields)
-            {
-                
                     fields.Add(new TabSimpleSyntax(2, $"[Key({f.Order})]"));
                     fields.Add(new TabSimpleSyntax(2, $"public {f.Type} {f.FieldName};"));
 
@@ -1051,6 +1051,7 @@ namespace HECSFramework.Core.Generator
 
                     constructor.Add(new TabSimpleSyntax(3, $"this.{f.FieldName} = {c.Identifier.ValueText.ToLower()}.{f.FieldName};"));
                     outFunc.Add(new TabSimpleSyntax(3, $"{c.Identifier.ValueText.ToLower()}.{f.FieldName} = this.{f.FieldName};"));
+                }
             }
 
             if (baselist.Any(x => x != null && x.ChildNodes().Any(z => z!=null && z.ToString() == "IAfterSerializationComponent")))
@@ -1274,7 +1275,7 @@ namespace HECSFramework.Core.Generator
             {
                 var name = container.Identifier.ValueText;
                 caseBody.Add(new TabSimpleSyntax(4, $"case {IndexGenerator.GetIndexForType(name)}:"));
-                caseBody.Add(new TabSimpleSyntax(5, $"var {name}{Resolver.ToLower()} = ({name + Resolver})dataContainerForResolving.Data;"));
+                caseBody.Add(new TabSimpleSyntax(5, $"var {name}{Resolver.ToLower()} = MessagePackSerializer.Deserialize<{name}{Resolver}>(dataContainerForResolving.Data);"));
                 caseBody.Add(new TabSimpleSyntax(5, $"var {name}component = ({name})entity.Get{name}();"));
                 caseBody.Add(new TabSimpleSyntax(5, $"{name}{Resolver.ToLower()}.Out(ref {name}component);"));
                 caseBody.Add(new TabSimpleSyntax(5, $"break;"));
@@ -1303,7 +1304,7 @@ namespace HECSFramework.Core.Generator
                 var name = container.Identifier.ValueText;
                 caseBody.Add(new TabSimpleSyntax(4, $"case {IndexGenerator.GetIndexForType(name)}:"));
                 caseBody.Add(new TabSimpleSyntax(5, $"var {name}new = new {name}();"));
-                caseBody.Add(new TabSimpleSyntax(5, $"var {name}data = ({name + Resolver})(resolverDataContainer.Data);"));
+                caseBody.Add(new TabSimpleSyntax(5, $"var {name}data = MessagePackSerializer.Deserialize<{name}{Resolver}>(resolverDataContainer.Data);"));
                 caseBody.Add(new TabSimpleSyntax(5, $"{name}data.Out(ref {name}new);"));
                 caseBody.Add(new TabSimpleSyntax(5, $"return {name}new;"));
             }
@@ -1329,7 +1330,7 @@ namespace HECSFramework.Core.Generator
             {
                 var name = container.Identifier.ValueText;
                 caseBody.Add(new TabSimpleSyntax(4, $"case {IndexGenerator.GetIndexForType(name)}:"));
-                caseBody.Add(new TabSimpleSyntax(5, $"var {name}{Resolver.ToLower()} = ({name + Resolver})(dataContainerForResolving.Data);"));
+                caseBody.Add(new TabSimpleSyntax(5, $"var {name}{Resolver.ToLower()} = MessagePackSerializer.Deserialize<{name}{Resolver}>(dataContainerForResolving.Data);"));
                 caseBody.Add(new TabSimpleSyntax(5, $"if (EntityManager.TryGetEntityByID(dataContainerForResolving.EntityGuid, out var entityOf{name}))"));
                 caseBody.Add(new LeftScopeSyntax(5));
                 caseBody.Add(new TabSimpleSyntax(6, $"var {name}component = ({name})entityOf{name}.Get{name}();"));
