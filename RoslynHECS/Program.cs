@@ -26,8 +26,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> networkCommands = new List<StructDeclarationSyntax>(256);
         public static List<ClassDeclarationSyntax> classes;
         private static List<StructDeclarationSyntax> structs;
-        public const string ScriptsPath = @"D:\Develop\ServerTestGit\TestServer\";
-        public const string HECSGenerated = @"D:\Develop\ServerTestGit\TestServer\HECSGenerated\";
+        public const string ScriptsPath = @"D:\Develop\MiniLife\Assets\";
+        public const string HECSGenerated = @"D:\Develop\MiniLife\Assets\Scripts\HECSGenerated\";
 
         private const string TypeProvider = "TypeProvider.cs";
         private const string MaskProvider = "MaskProvider.cs";
@@ -44,7 +44,7 @@ namespace RoslynHECS
         private const string BaseComponent = "BaseComponent";
 
         private static bool resolversNeeded = true;
-        private static bool bluePrintsNeeded = false;
+        private static bool bluePrintsNeeded = true;
         private static bool commandMapneeded = true;
 
         static async Task Main(string[] args)
@@ -117,8 +117,8 @@ namespace RoslynHECS
                 var componetsBPFiles = processGeneration.GenerateComponentsBluePrints();
                 var systemsBPFiles = processGeneration.GenerateSystemsBluePrints();
 
-                CleanDirectory(ScriptsPath + ComponentsBluePrintsPath);
-                CleanDirectory(ScriptsPath + SystemsBluePrintsPath);
+                //CleanDirectory(ScriptsPath + ComponentsBluePrintsPath);
+                //CleanDirectory(ScriptsPath + SystemsBluePrintsPath);
 
                 foreach (var c in componetsBPFiles)
                     SaveToFile(c.name, c.classBody, ScriptsPath + ComponentsBluePrintsPath);

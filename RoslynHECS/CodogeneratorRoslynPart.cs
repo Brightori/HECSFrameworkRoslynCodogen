@@ -10,7 +10,7 @@ namespace HECSFramework.Core.Generator
 {
     public partial class CodeGenerator
     {
-        public List<ClassDeclarationSyntax> needResolver = new List<ClassDeclarationSyntax>();
+        public HashSet<ClassDeclarationSyntax> needResolver = new HashSet<ClassDeclarationSyntax>();
         public List<ClassDeclarationSyntax> containersSolve = new List<ClassDeclarationSyntax>();
         public List<Type> commands = new List<Type>();
         public const string Resolver = "Resolver";
@@ -763,7 +763,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(new LeftScopeSyntax(2));
             tree.Add(new TabSimpleSyntax(3, "unchecked"));
             tree.Add(new LeftScopeSyntax(3));
-            tree.Add(new TabSimpleSyntax(4, "int hash = 256;"));
+            tree.Add(new TabSimpleSyntax(4, "int hash = mask.Index;"));
             tree.Add(body);
             tree.Add(new TabSimpleSyntax(4, "return hash;"));
             tree.Add(new RightScopeSyntax(3));
@@ -1012,6 +1012,9 @@ namespace HECSFramework.Core.Generator
                             if (getNameSpace != string.Empty)
                                 AddUniqueSyntax(usings, new UsingSyntax(getNameSpace));
 
+                            if (typeFields.Any(x => x.Order == validate.Order || x.FieldName == field.Declaration.Variables[0].Identifier.ToString()))
+                                continue;
+
                             typeFields.Add(new GatheredField
                             {
                                 Order = validate.Order,
@@ -1028,7 +1031,8 @@ namespace HECSFramework.Core.Generator
 
                         if (validate.valid)
                         {
-
+                            if (typeFields.Any(x => x.Order == validate.Order))
+                                continue;
 
                             typeFields.Add(new GatheredField
                             {
@@ -1040,18 +1044,20 @@ namespace HECSFramework.Core.Generator
                         }
                     }
                 }
+            }
 
-                foreach (var f in typeFields)
-                {
+            typeFields = typeFields.Distinct().ToList();
 
-                    fields.Add(new TabSimpleSyntax(2, $"[Key({f.Order})]"));
-                    fields.Add(new TabSimpleSyntax(2, $"public {f.Type} {f.FieldName};"));
+            foreach (var f in typeFields)
+            {
 
-                    fieldsForConstructor.Add((f.Type, f.FieldName));
+                fields.Add(new TabSimpleSyntax(2, $"[Key({f.Order})]"));
+                fields.Add(new TabSimpleSyntax(2, $"public {f.Type} {f.FieldName};"));
 
-                    constructor.Add(new TabSimpleSyntax(3, $"this.{f.FieldName} = {c.Identifier.ValueText.ToLower()}.{f.FieldName};"));
-                    outFunc.Add(new TabSimpleSyntax(3, $"{c.Identifier.ValueText.ToLower()}.{f.FieldName} = this.{f.FieldName};"));
-                }
+                fieldsForConstructor.Add((f.Type, f.FieldName));
+
+                constructor.Add(new TabSimpleSyntax(3, $"this.{f.FieldName} = {c.Identifier.ValueText.ToLower()}.{f.FieldName};"));
+                outFunc.Add(new TabSimpleSyntax(3, $"{c.Identifier.ValueText.ToLower()}.{f.FieldName} = this.{f.FieldName};"));
             }
 
             if (baselist.Any(x => x != null && x.ChildNodes().Any(z => z!=null && z.ToString() == "IAfterSerializationComponent")))
@@ -1158,6 +1164,23 @@ namespace HECSFramework.Core.Generator
             public string FieldName;
             public int Order;
             public CSharpSyntaxNode Node;
+
+            public override bool Equals(object obj)
+            {
+                return obj is GatheredField field &&
+                       Type == field.Type &&
+                       FieldName == field.FieldName &&
+                       Order == field.Order;
+            }
+
+            public override int GetHashCode()
+            {
+                int hashCode = -1156031304;
+                hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Type);
+                hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(FieldName);
+                hashCode = hashCode * -1521134295 + Order.GetHashCode();
+                return hashCode;
+            }
         }
 
         private ISyntax GetOutToEntityVoidBodyRoslyn(ClassDeclarationSyntax c)
