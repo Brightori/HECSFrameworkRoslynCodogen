@@ -1034,13 +1034,26 @@ namespace HECSFramework.Core.Generator
                             if (typeFields.Any(x => x.Order == validate.Order))
                                 continue;
 
-                            typeFields.Add(new GatheredField
+                            if (property.Type.ToString().Contains("ReactiveValue"))
                             {
-                                Order = validate.Order,
-                                Type = property.Type.ToString(),
-                                FieldName = property.Identifier.ToString(),
-                                Node = property
-                            });
+                                typeFields.Add(new GatheredField
+                                {
+                                    Order = validate.Order,
+                                    Type = property.Type.ToString().Replace("ReactiveValue", "").Replace("<", "").Replace(">",""),
+                                    FieldName = property.Identifier.ToString(),
+                                    Node = property
+                                });
+                            }
+                            else
+                            {
+                                typeFields.Add(new GatheredField
+                                {
+                                    Order = validate.Order,
+                                    Type = property.Type.ToString(),
+                                    FieldName = property.Identifier.ToString(),
+                                    Node = property
+                                });
+                            }
                         }
                     }
                 }
@@ -1056,8 +1069,16 @@ namespace HECSFramework.Core.Generator
 
                 fieldsForConstructor.Add((f.Type, f.FieldName));
 
-                constructor.Add(new TabSimpleSyntax(3, $"this.{f.FieldName} = {c.Identifier.ValueText.ToLower()}.{f.FieldName};"));
-                outFunc.Add(new TabSimpleSyntax(3, $"{c.Identifier.ValueText.ToLower()}.{f.FieldName} = this.{f.FieldName};"));
+                if (f.Node is PropertyDeclarationSyntax declarationSyntax && declarationSyntax.Type.ToString().Contains("ReactiveValue"))
+                {
+                    constructor.Add(new TabSimpleSyntax(3, $"this.{f.FieldName} = {c.Identifier.ValueText.ToLower()}.{f.FieldName}.CurrentValue;"));
+                    outFunc.Add(new TabSimpleSyntax(3, $"{c.Identifier.ValueText.ToLower()}.{f.FieldName}.CurrentValue = this.{f.FieldName};"));
+                }
+                else
+                {
+                    constructor.Add(new TabSimpleSyntax(3, $"this.{f.FieldName} = {c.Identifier.ValueText.ToLower()}.{f.FieldName};"));
+                    outFunc.Add(new TabSimpleSyntax(3, $"{c.Identifier.ValueText.ToLower()}.{f.FieldName} = this.{f.FieldName};"));
+                }
             }
 
             if (baselist.Any(x => x != null && x.ChildNodes().Any(z => z!=null && z.ToString() == "IAfterSerializationComponent")))
@@ -1130,6 +1151,20 @@ namespace HECSFramework.Core.Generator
 
             if (property.Type.ToString().Contains("ReactiveValue"))
             {
+                var needed = property.AccessorList.Accessors.FirstOrDefault(x => x.Kind() == SyntaxKind.SetAccessorDeclaration);
+
+                if (needed == null)
+                    return (false, -1);
+
+                foreach (var a in property.AttributeLists.SelectMany(x => x.Attributes).ToArray())
+                {
+                    if (a.ToString().Contains("Field") && property.Modifiers.ToString().Contains("public"))
+                    {
+                        var intValue = int.Parse(a.ArgumentList.Arguments.ToArray()[0].ToString());
+                        Console.WriteLine("нашли реактив проперти");
+                        return (true, intValue);
+                    }
+                }
             }
             else
             {
