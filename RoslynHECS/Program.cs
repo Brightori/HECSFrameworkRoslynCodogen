@@ -26,8 +26,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> networkCommands = new List<StructDeclarationSyntax>(256);
         public static List<ClassDeclarationSyntax> classes;
         private static List<StructDeclarationSyntax> structs;
-        public const string ScriptsPath = @"D:\Develop\MiniLife\Assets\";
-        public const string HECSGenerated = @"D:\Develop\MiniLife\Assets\Scripts\HECSGenerated\";
+        public const string ScriptsPath = @"D:\Develop\MiniLife.Server\MinilifeServer\";
+        public const string HECSGenerated = @"D:\Develop\MiniLife.Server\MinilifeServer\HECSGenerated\";
 
         private const string TypeProvider = "TypeProvider.cs";
         private const string MaskProvider = "MaskProvider.cs";
@@ -171,6 +171,7 @@ namespace RoslynHECS
             if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains(typeof(IGlobalCommand).Name)))
             {
                 globalCommands.Add(s);
+                localCommands.Add(s);
                 Console.WriteLine("нашли глобальную команду " + structCurrent);
             }
 
