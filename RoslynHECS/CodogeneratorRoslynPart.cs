@@ -72,8 +72,8 @@ namespace HECSFramework.Core.Generator
                 var name = t.Identifier.ValueText;
 
                 tree.Add(new ParagraphSyntax());
-                tree.Add(new TabSimpleSyntax(3, $"if (system is IReactCommand<{name}> {name}CommandsReact)"));
-                tree.Add(new TabSimpleSyntax(4, $"system.Owner.EntityCommandService.AddListener<{name}>(system, {name}CommandsReact.CommandReact);"));
+                tree.Add(new TabSimpleSyntax(3, $"if (system is IReactCommand<{name}> {name}CommandsLocalReact)"));
+                tree.Add(new TabSimpleSyntax(4, $"system.Owner.EntityCommandService.AddListener<{name}>(system, {name}CommandsLocalReact.CommandReact);"));
             }
 
             return tree;
