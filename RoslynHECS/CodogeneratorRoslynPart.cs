@@ -1028,11 +1028,15 @@ namespace HECSFramework.Core.Generator
                     if (m is PropertyDeclarationSyntax property)
                     {
                         var validate = IsValidProperty(property);
+                        var getNameSpace = GetNameSpace(property);
 
                         if (validate.valid)
                         {
                             if (typeFields.Any(x => x.Order == validate.Order))
                                 continue;
+
+                            if (getNameSpace != string.Empty)
+                                AddUniqueSyntax(usings, new UsingSyntax(getNameSpace));
 
                             if (property.Type.ToString().Contains("ReactiveValue"))
                             {
@@ -1110,6 +1114,30 @@ namespace HECSFramework.Core.Generator
 
             return (false, -1);
         }
+
+        private string GetNameSpace(PropertyDeclarationSyntax field)
+        {
+            var neededClass = Program.classes.FirstOrDefault(x => x.Identifier.ValueText == field.Identifier.ToString());
+            var namespaceString = string.Empty;
+
+            if (neededClass == null)
+                return namespaceString;
+
+            var tree = neededClass.SyntaxTree.GetRoot().ChildNodes();
+
+            foreach (var cn in tree)
+            {
+                if (cn is NamespaceDeclarationSyntax declarationSyntax)
+                {
+                    var namespaceName = declarationSyntax.Name.ToString();
+                    namespaceString = namespaceName;
+                    break;
+                }
+            }
+
+            return namespaceString;
+        }
+
 
         private string GetNameSpace(FieldDeclarationSyntax field)
         {
