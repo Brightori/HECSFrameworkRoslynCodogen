@@ -1,5 +1,6 @@
 ﻿using HECSFramework.Core;
 using HECSFramework.Core.Generator;
+using HECSFramework.Core.Helpers;
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -26,8 +27,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> networkCommands = new List<StructDeclarationSyntax>(256);
         public static List<ClassDeclarationSyntax> classes;
         private static List<StructDeclarationSyntax> structs;
-        public const string ScriptsPath = @"D:\Develop\MiniLife.Server\MinilifeServer\";
-        public const string HECSGenerated = @"D:\Develop\MiniLife.Server\MinilifeServer\HECSGenerated\";
+        public const string ScriptsPath = @"D:\Develop\MiniLife\Assets\";
+        public const string HECSGenerated = @"D:\Develop\MiniLife\Assets\Scripts\HECSGenerated\";
 
         private const string TypeProvider = "TypeProvider.cs";
         private const string MaskProvider = "MaskProvider.cs";
@@ -44,7 +45,7 @@ namespace RoslynHECS
         private const string BaseComponent = "BaseComponent";
 
         private static bool resolversNeeded = true;
-        private static bool bluePrintsNeeded = false;
+        private static bool bluePrintsNeeded = true;
         private static bool commandMapneeded = true;
 
         static async Task Main(string[] args)
@@ -170,22 +171,22 @@ namespace RoslynHECS
 
             if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains(typeof(IGlobalCommand).Name)))
             {
-                globalCommands.Add(s);
-                localCommands.Add(s);
+                globalCommands.AddOrRemoveElement(s, true);
+                localCommands.AddOrRemoveElement(s,true);
                 Console.WriteLine("нашли глобальную команду " + structCurrent);
             }
 
             if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains(typeof(ICommand).Name)))
             {
-                localCommands.Add(s);
+                localCommands.AddOrRemoveElement(s, true);
                 Console.WriteLine("нашли локальную команду " + structCurrent);
             }    
             
             if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains("INetworkCommand")))
             {
-                globalCommands.Add(s);
-                localCommands.Add(s);
-                networkCommands.Add(s);
+                globalCommands.AddOrRemoveElement(s, true);
+                localCommands.AddOrRemoveElement(s, true);
+                networkCommands.AddOrRemoveElement(s, true);
                 Console.WriteLine("нашли локальную команду " + structCurrent);
             }
         }
