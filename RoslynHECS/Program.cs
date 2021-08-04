@@ -53,6 +53,8 @@ namespace RoslynHECS
         static async Task Main(string[] args)
         {
             CheckArgs(args);
+            Console.WriteLine($"Путь: {ScriptsPath}");
+            Console.WriteLine($"Путь кодогена: {HECSGenerated}");
 
             var files = new DirectoryInfo(ScriptsPath).GetFiles("*.cs", SearchOption.AllDirectories);
             var list = new List<SyntaxTree>();
@@ -89,19 +91,23 @@ namespace RoslynHECS
 
             Console.WriteLine("нашли компоненты " + components.Count);
             Console.WriteLine($"Найдены аргументы запуска: {string.Join(", ", args)}");
-            Console.WriteLine($"Доступные аргументы: {Environment.NewLine}{string.Join(Environment.NewLine, new[] { "-path:путь_до_скриптов", "-no_blueprints", "-no_resolvers", "-no_commands", "-server" })}");
+            Console.WriteLine($"Доступные аргументы: {Environment.NewLine}{string.Join(Environment.NewLine, new[] { "path:путь_до_скриптов", "no_blueprints", "no_resolvers", "no_commands", "server" })}");
             Console.ReadKey();
         }
 
         private static void CheckArgs(string[] args)
 		{
-            var path = args.SingleOrDefault(a => a.Contains("path:"))?.Replace("-path:","");
+            var path = args.SingleOrDefault(a => a.Contains("path:"))?.Replace("path:","").TrimStart('-');
             var server = args.Any(a => a.Contains("server"));
             if (path != null)
             {
-                path = Path.GetFullPath(path);
                 ScriptsPath = path;
+                ScriptsPath = Path.GetFullPath(ScriptsPath);
+                if (!ScriptsPath.EndsWith(Path.DirectorySeparatorChar.ToString())) ScriptsPath += Path.DirectorySeparatorChar;
+                
                 HECSGenerated = server ? Path.Combine(ScriptsPath, "HECSGenerated") : Path.Combine(ScriptsPath, "Scripts", "HECSGenerated");
+                HECSGenerated = Path.GetFullPath(HECSGenerated);
+                if (!HECSGenerated.EndsWith(Path.DirectorySeparatorChar.ToString())) HECSGenerated += Path.DirectorySeparatorChar;
             }
 
             bluePrintsNeeded = !args.Any(a => a.Contains("no_blueprints"));
