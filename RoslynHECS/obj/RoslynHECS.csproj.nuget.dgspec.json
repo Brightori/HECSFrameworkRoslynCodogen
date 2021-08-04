@@ -1,37 +1,36 @@
 {
   "format": 1,
   "restore": {
-    "D:\\Develop\\HECSFrameworkRoslynCodogen\\RoslynHECS\\RoslynHECS.csproj": {}
+    "C:\\Users\\Xamto\\repos\\HECSFrameworkRoslynCodogen\\RoslynHECS\\RoslynHECS.csproj": {}
   },
   "projects": {
-    "D:\\Develop\\HECSFrameworkRoslynCodogen\\RoslynHECS\\RoslynHECS.csproj": {
+    "C:\\Users\\Xamto\\repos\\HECSFrameworkRoslynCodogen\\RoslynHECS\\RoslynHECS.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\Develop\\HECSFrameworkRoslynCodogen\\RoslynHECS\\RoslynHECS.csproj",
+        "projectUniqueName": "C:\\Users\\Xamto\\repos\\HECSFrameworkRoslynCodogen\\RoslynHECS\\RoslynHECS.csproj",
         "projectName": "RoslynHECS",
-        "projectPath": "D:\\Develop\\HECSFrameworkRoslynCodogen\\RoslynHECS\\RoslynHECS.csproj",
-        "packagesPath": "C:\\Users\\1\\.nuget\\packages\\",
-        "outputPath": "D:\\Develop\\HECSFrameworkRoslynCodogen\\RoslynHECS\\obj\\",
+        "projectPath": "C:\\Users\\Xamto\\repos\\HECSFrameworkRoslynCodogen\\RoslynHECS\\RoslynHECS.csproj",
+        "packagesPath": "C:\\Users\\Xamto\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\Xamto\\repos\\HECSFrameworkRoslynCodogen\\RoslynHECS\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+          "c:\\program files\\dotnet\\sdk\\NuGetFallbackFolder"
         ],
         "configFilePaths": [
-          "D:\\Develop\\HECSFrameworkRoslynCodogen\\NuGet.Config",
-          "C:\\Users\\1\\AppData\\Roaming\\NuGet\\NuGet.Config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Users\\Xamto\\repos\\HECSFrameworkRoslynCodogen\\NuGet.Config",
+          "C:\\Users\\Xamto\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
         "originalTargetFrameworks": [
-          "net472"
+          "net5.0"
         ],
         "sources": {
           "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json": {},
           "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-tools/nuget/v3/index.json": {}
         },
         "frameworks": {
-          "net472": {
-            "targetAlias": "net472",
+          "net5.0": {
+            "targetAlias": "net5.0",
             "projectReferences": {}
           }
         },
@@ -42,8 +41,8 @@
         }
       },
       "frameworks": {
-        "net472": {
-          "targetAlias": "net472",
+        "net5.0": {
+          "targetAlias": "net5.0",
           "dependencies": {
             "Microsoft.Build.Locator": {
               "target": "Package",
@@ -67,12 +66,22 @@
               "version": "[3.3.1, )"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\6.0.100-preview.5.21302.13\\RuntimeIdentifierGraph.json"
-        }
-      },
-      "runtimes": {
-        "win7-x86": {
-          "#import": []
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "c:\\program files\\dotnet\\sdk\\5.0.302\\RuntimeIdentifierGraph.json"
         }
       }
     }
