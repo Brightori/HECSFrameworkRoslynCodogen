@@ -27,10 +27,10 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> networkCommands = new List<StructDeclarationSyntax>(256);
         public static List<ClassDeclarationSyntax> classes;
         private static List<StructDeclarationSyntax> structs;
-        //public const string ScriptsPath = @"E:\repos\Kefir\minilife-client\Assets\";
-        //public const string HECSGenerated = @"E:\repos\Kefir\minilife-client\Assets\Scripts\HECSGenerated\";
-        private static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
-        public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
+        public static string ScriptsPath = @"C:\Users\Xamto\repos\minilife-client\Assets\";
+        public static string HECSGenerated = @"C:\Users\Xamto\repos\minilife-client\Assets\\Scripts\HECSGenerated\";
+        //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
+        //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
         private const string TypeProvider = "TypeProvider.cs";
         private const string MaskProvider = "MaskProvider.cs";
@@ -88,27 +88,25 @@ namespace RoslynHECS
             SaveFiles();
 
             Console.WriteLine("нашли компоненты " + components.Count);
+            Console.WriteLine($"Найдены аргументы запуска: {string.Join(", ", args)}");
+            Console.WriteLine($"Доступные аргументы: {Environment.NewLine}{string.Join(Environment.NewLine, new[] { "-path:путь_до_скриптов", "-no_blueprints", "-no_resolvers", "-no_commands", "-server" })}");
+            Console.ReadKey();
         }
 
         private static void CheckArgs(string[] args)
 		{
-            if (args == null || args.Length <= 0) return;
-            if (args[0] != null)
-                ScriptsPath = args[0];
-            if (args[1] != null)
-                HECSGenerated = args[1];
-            if(args[2] != null)
-			{
-                switch(args[2])
-				{
-                    case "client":
-                        bluePrintsNeeded = true;
-                        break;
-                    case "server":
-                        bluePrintsNeeded = false;
-                        break;
-                }
-			}
+            var path = args.SingleOrDefault(a => a.Contains("path:"))?.Replace("-path:","");
+            var server = args.Any(a => a.Contains("server"));
+            if (path != null)
+            {
+                path = Path.GetFullPath(path);
+                ScriptsPath = path;
+                HECSGenerated = server ? Path.Combine(ScriptsPath, "HECSGenerated") : Path.Combine(ScriptsPath, "Scripts", "HECSGenerated");
+            }
+
+            bluePrintsNeeded = !args.Any(a => a.Contains("no_blueprints"));
+            resolversNeeded = !args.Any(a => a.Contains("no_resolvers"));
+            commandMapneeded = !args.Any(a => a.Contains("no_commands"));
         }
 
         private static void SaveFiles()
