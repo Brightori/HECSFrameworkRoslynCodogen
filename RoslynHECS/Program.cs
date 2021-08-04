@@ -27,8 +27,10 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> networkCommands = new List<StructDeclarationSyntax>(256);
         public static List<ClassDeclarationSyntax> classes;
         private static List<StructDeclarationSyntax> structs;
-        public const string ScriptsPath = @"D:\Develop\MiniLife\Assets\";
-        public const string HECSGenerated = @"D:\Develop\MiniLife\Assets\Scripts\HECSGenerated\";
+        //public const string ScriptsPath = @"E:\repos\Kefir\minilife-client\Assets\";
+        //public const string HECSGenerated = @"E:\repos\Kefir\minilife-client\Assets\Scripts\HECSGenerated\";
+        private static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
+        public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
         private const string TypeProvider = "TypeProvider.cs";
         private const string MaskProvider = "MaskProvider.cs";
@@ -45,11 +47,13 @@ namespace RoslynHECS
         private const string BaseComponent = "BaseComponent";
 
         private static bool resolversNeeded = true;
-        private static bool bluePrintsNeeded = true;
+        private static bool bluePrintsNeeded = false;
         private static bool commandMapneeded = true;
 
         static async Task Main(string[] args)
         {
+            CheckArgs(args);
+
             var files = new DirectoryInfo(ScriptsPath).GetFiles("*.cs", SearchOption.AllDirectories);
             var list = new List<SyntaxTree>();
 
@@ -86,20 +90,41 @@ namespace RoslynHECS
             Console.WriteLine("нашли компоненты " + components.Count);
         }
 
+        private static void CheckArgs(string[] args)
+		{
+            if (args == null || args.Length <= 0) return;
+            if (args[0] != null)
+                ScriptsPath = args[0];
+            if (args[1] != null)
+                HECSGenerated = args[1];
+            if(args[2] != null)
+			{
+                switch(args[2])
+				{
+                    case "client":
+                        bluePrintsNeeded = true;
+                        break;
+                    case "server":
+                        bluePrintsNeeded = false;
+                        break;
+                }
+			}
+        }
+
         private static void SaveFiles()
         {
             var processGeneration = new CodeGenerator();
-            SaveToFile(TypeProvider, processGeneration.GenerateTypesMapRoslyn());
-            SaveToFile(MaskProvider, processGeneration.GenerateMaskProviderRoslyn());
-            SaveToFile(SystemBindings, processGeneration.GetSystemBindsByRoslyn());
-            SaveToFile(ComponentContext, processGeneration.GetComponentContextRoslyn());
-            SaveToFile(HecsMasks, processGeneration.GenerateHecsMasksRoslyn());
+            SaveToFile(TypeProvider, processGeneration.GenerateTypesMapRoslyn(), HECSGenerated);
+            SaveToFile(MaskProvider, processGeneration.GenerateMaskProviderRoslyn(), HECSGenerated);
+            SaveToFile(SystemBindings, processGeneration.GetSystemBindsByRoslyn(), HECSGenerated);
+            SaveToFile(ComponentContext, processGeneration.GetComponentContextRoslyn(), HECSGenerated);
+            SaveToFile(HecsMasks, processGeneration.GenerateHecsMasksRoslyn(), HECSGenerated);
 
             if (resolversNeeded)
             {
                 var path = HECSGenerated + @"Resolvers\";
                 var resolvers = processGeneration.GetSerializationResolvers();
-                SaveToFile(MapResolver, processGeneration.GetResolverMap());
+                SaveToFile(MapResolver, processGeneration.GetResolverMap(), HECSGenerated);
 
                 CleanDirectory(path);
 
@@ -110,7 +135,7 @@ namespace RoslynHECS
             if (commandMapneeded)
             {
                 var commandMap = processGeneration.GenerateNetworkCommandsMap(networkCommands);
-                SaveToFile("CommandsMap.cs", commandMap);
+                SaveToFile("CommandsMap.cs", commandMap, HECSGenerated);
             }
 
             if (bluePrintsNeeded)
@@ -127,7 +152,7 @@ namespace RoslynHECS
                 foreach (var c in systemsBPFiles)
                     SaveToFile(c.name, c.classBody, ScriptsPath + SystemsBluePrintsPath);
 
-                SaveToFile(BluePrintsProvider, processGeneration.GetBluePrintsProvider(), needToImport: true);
+                SaveToFile(BluePrintsProvider, processGeneration.GetBluePrintsProvider(),HECSGenerated, needToImport: true);
             }
         }
 
@@ -148,7 +173,7 @@ namespace RoslynHECS
             }
         }
 
-        private static void SaveToFile(string name, string data, string pathToDirectory = HECSGenerated, bool needToImport = false)
+        private static void SaveToFile(string name, string data, string pathToDirectory, bool needToImport = false)
         {
             var path = pathToDirectory + name;
 
