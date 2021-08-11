@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "RoslynHECS": {
+      "commandName": "Project",
+      "nativeDebugging": true
+    }
+  }
+}
