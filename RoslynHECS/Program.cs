@@ -26,9 +26,9 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> localCommands = new List<StructDeclarationSyntax>(256);
         public static List<StructDeclarationSyntax> networkCommands = new List<StructDeclarationSyntax>(256);
         public static List<ClassDeclarationSyntax> classes;
-        private static List<StructDeclarationSyntax> structs;
-        public static string ScriptsPath = @"C:\Users\Xamto\repos\minilife-client\Assets\";
-        public static string HECSGenerated = @"C:\Users\Xamto\repos\minilife-client\Assets\\Scripts\HECSGenerated\";
+        public static List<StructDeclarationSyntax> structs;
+        public static string ScriptsPath = @"D:\Develop\MiniLife\Assets\";
+        public static string HECSGenerated = @"D:\Develop\MiniLife\Assets\Scripts\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 

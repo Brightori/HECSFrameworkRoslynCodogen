@@ -1029,6 +1029,7 @@ namespace HECSFramework.Core.Generator
                     {
                         var validate = IsValidProperty(property);
                         var getNameSpace = GetNameSpace(property);
+                        var getCollectionNameSpace = GetNameSpaceForCollection(property);
 
                         if (validate.valid)
                         {
@@ -1037,6 +1038,11 @@ namespace HECSFramework.Core.Generator
 
                             if (getNameSpace != string.Empty)
                                 AddUniqueSyntax(usings, new UsingSyntax(getNameSpace));
+
+                            if (getCollectionNameSpace.isValid)
+                            {
+                                AddUniqueSyntax(usings, new UsingSyntax(getCollectionNameSpace.nameSpace));
+                            }
 
                             if (property.Type.ToString().Contains("ReactiveValue"))
                             {
@@ -1113,6 +1119,90 @@ namespace HECSFramework.Core.Generator
             }
 
             return (false, -1);
+        }
+
+        public (bool isValid, string nameSpace) GetNameSpaceForCollection(PropertyDeclarationSyntax propertyDeclaration)
+        {
+            var result = (false, string.Empty);
+
+            var kind = propertyDeclaration.Type.Kind().ToString();
+
+            if (kind.Contains("Array") || kind.Contains("List"))
+            {
+                var collection = propertyDeclaration.Type.DescendantNodes().ToList();
+
+                foreach(var s in collection)
+                {
+                    if (s is IdentifierNameSyntax nameSyntax)
+                    {
+                        foreach (var cl in Program.classes)
+                        {
+                            if (cl.Identifier.ValueText.Contains(s.ToString()))
+                            {
+                                var nameSpace = cl.SyntaxTree.GetRoot().ChildNodes().FirstOrDefault(x => x is NamespaceDeclarationSyntax);
+
+                                if (nameSpace != null)
+                                {
+                                    foreach (var child in nameSpace.ChildNodes())
+                                    {
+                                        if (child is QualifiedNameSyntax nameSyntaxNamespace)
+                                        {
+                                            var checkedName = nameSyntaxNamespace.ToString();
+                                            if (checkedName == string.Empty || checkedName == "MessagePack.Resolvers")
+                                                continue;
+
+                                            return (true, checkedName);
+                                        }
+
+                                        if (child is IdentifierNameSyntax identifierName)
+                                        {
+                                            var checkedName = identifierName.ToString();
+                                            if (checkedName == string.Empty || checkedName == "MessagePack.Resolvers")
+                                                continue;
+
+                                            return (true, checkedName);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        foreach (var st in Program.structs)
+                        {
+                            if (st.Identifier.ValueText.Contains(s.ToString()))
+                            {
+                                var nameSpace = st.SyntaxTree.GetRoot().ChildNodes().FirstOrDefault(x => x is NamespaceDeclarationSyntax);
+
+                                if (nameSpace != null)
+                                {
+                                    foreach (var child in nameSpace.ChildNodes())
+                                    {
+                                        if (child is QualifiedNameSyntax nameSyntaxNamespace)
+                                        {
+                                            var checkedName = nameSyntaxNamespace.ToString();
+                                            if (checkedName == string.Empty || checkedName == "MessagePack.Resolvers")
+                                                continue;
+
+                                            return (true, checkedName);
+                                        }
+
+                                        if (child is IdentifierNameSyntax identifierName)
+                                        {
+                                            var checkedName = identifierName.ToString();
+                                            if (checkedName == string.Empty || checkedName == "MessagePack.Resolvers")
+                                                continue;
+
+                                            return (true, checkedName);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return result;
         }
 
         private string GetNameSpace(PropertyDeclarationSyntax field)
