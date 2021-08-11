@@ -27,8 +27,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> networkCommands = new List<StructDeclarationSyntax>(256);
         public static List<ClassDeclarationSyntax> classes;
         public static List<StructDeclarationSyntax> structs;
-        public static string ScriptsPath = @"D:\Develop\MiniLife\Assets\";
-        public static string HECSGenerated = @"D:\Develop\MiniLife\Assets\Scripts\HECSGenerated\";
+        public static string ScriptsPath = @"D:\Develop\MiniLife.Server\MinilifeServer\";
+        public static string HECSGenerated = @"D:\Develop\MiniLife.Server\MinilifeServer\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
@@ -97,6 +97,9 @@ namespace RoslynHECS
 
         private static void CheckArgs(string[] args)
 		{
+            if (args == null || args.Length == 0)
+                return;
+
             var path = args.SingleOrDefault(a => a.Contains("path:"))?.Replace("path:","").TrimStart('-');
             var server = args.Any(a => a.Contains("server"));
             if (path != null)
