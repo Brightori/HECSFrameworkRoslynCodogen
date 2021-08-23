@@ -25,8 +25,11 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> globalCommands = new List<StructDeclarationSyntax>(256);
         public static List<StructDeclarationSyntax> localCommands = new List<StructDeclarationSyntax>(256);
         public static List<StructDeclarationSyntax> networkCommands = new List<StructDeclarationSyntax>(256);
+        
         public static List<ClassDeclarationSyntax> classes;
         public static List<StructDeclarationSyntax> structs;
+        public static List<InterfaceDeclarationSyntax> interfaces;
+
         public static string ScriptsPath = @"D:\Develop\MiniLife.Server\MinilifeServer\";
         public static string HECSGenerated = @"D:\Develop\MiniLife.Server\MinilifeServer\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
@@ -71,15 +74,18 @@ namespace RoslynHECS
 
             var classVisitor = new ClassVirtualizationVisitor();
             var structVisitor = new StructVirtualizationVisitor();
+            var interfaceVisitor = new InterfaceVirtualizationVisitor();
 
             foreach (var syntaxTree in list)
             {
                 classVisitor.Visit(syntaxTree.GetRoot());
                 structVisitor.Visit(syntaxTree.GetRoot());
+                interfaceVisitor.Visit(syntaxTree.GetRoot());
             }
 
             classes = classVisitor.Classes;
             structs = structVisitor.Structs;
+            interfaces = interfaceVisitor.Interfaces;
 
             foreach (var c in classes)
                 ProcessClasses(c);
@@ -334,6 +340,30 @@ namespace RoslynHECS
                 node = (StructDeclarationSyntax)base.VisitStructDeclaration(node);
                 Structs.Add(node); // save your visited classes
                 return node;
+            }
+        }        
+        
+        class InterfaceVirtualizationVisitor : CSharpSyntaxRewriter
+        {
+            public List<InterfaceDeclarationSyntax> Interfaces { get; set; }
+            
+            public InterfaceVirtualizationVisitor()
+            {
+                Interfaces = new List<InterfaceDeclarationSyntax>();
+            }
+
+            public override SyntaxNode Visit(SyntaxNode node)
+            {
+                if (node is InterfaceDeclarationSyntax inter)
+                    VisitInterfaceDeclaration(inter);
+                
+                return base.Visit(node);
+            }
+
+            public override SyntaxNode VisitInterfaceDeclaration(InterfaceDeclarationSyntax node)
+            {
+                Interfaces.Add(node);
+                return base.VisitInterfaceDeclaration(node);
             }
         }
 
