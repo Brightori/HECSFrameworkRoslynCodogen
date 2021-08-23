@@ -50,7 +50,7 @@ namespace RoslynHECS
         private const string BaseComponent = "BaseComponent";
 
         private static bool resolversNeeded = true;
-        private static bool bluePrintsNeeded = false;
+        private static bool bluePrintsNeeded = true;
         private static bool commandMapneeded = true;
 
         static async Task Main(string[] args)
@@ -88,7 +88,11 @@ namespace RoslynHECS
             interfaces = interfaceVisitor.Interfaces;
 
             foreach (var c in classes)
+            {
+                //Console.WriteLine(c.Identifier.ValueText);
                 ProcessClasses(c);
+            }
+                
 
             foreach (var s in structs)
                 ProcessStructs(s);
@@ -241,37 +245,43 @@ namespace RoslynHECS
         private static void ProcessClasses(ClassDeclarationSyntax c)
         {
             var classCurrent = c.Identifier.ValueText;
+
+            //todo это костыль для избегания рекурсий из за дженериков в которые передаётся аргументом тип реализатора
+            //можно попробать добавить счётчик или запилить проверку 
+            if (c.ConstraintClauses != null && c.ConstraintClauses.Count > 0)
+                return;
+
             var baseClass = c.BaseList != null ? c.BaseList.ChildNodes()?.ToArray() : new SyntaxNode[0];
-            var isAbstract = c.Modifiers.Any(x => x.IsKind(SyntaxKind.AbstractKeyword));
+                var isAbstract = c.Modifiers.Any(x => x.IsKind(SyntaxKind.AbstractKeyword));
 
-            if (IsComponent(c) && !isAbstract)
-            {
-                if (components.Contains(classCurrent))
-                    return;
+                if (IsComponent(c) && !isAbstract)
+                {
+                    if (components.Contains(classCurrent))
+                        return;
 
-                components.Add(classCurrent);
-                componentsDeclarations.Add(c);
-                Console.WriteLine("нашли компонент " + classCurrent);
-            }
+                    components.Add(classCurrent);
+                    componentsDeclarations.Add(c);
+                    Console.WriteLine("нашли компонент " + classCurrent);
+                }
 
-            if (IsSystem(c) && !isAbstract && !classCurrent.Contains("SystemBluePrint"))
-            {
-                if (systems.Contains(classCurrent))
-                    return;
+                if (IsSystem(c) && !isAbstract && !classCurrent.Contains("SystemBluePrint"))
+                {
+                    if (systems.Contains(classCurrent))
+                        return;
 
-                systems.Add(classCurrent);
-                systemsDeclarations.Add(c);
+                    systems.Add(classCurrent);
+                    systemsDeclarations.Add(c);
 
-                Console.WriteLine("----");
-                Console.WriteLine("нашли систему " + classCurrent);
-            }
+                    Console.WriteLine("----");
+                    Console.WriteLine("нашли систему " + classCurrent);
+                }
         }
 
         private static bool IsComponent(ClassDeclarationSyntax c)
         {
-            var baseClass = c.BaseList != null ? c.BaseList.ChildNodes()?.ToArray() : new SyntaxNode[0];
+            var baseClass = c.BaseList != null ? c.BaseList.ChildNodes()?.ToList() : new List<SyntaxNode>(0);
 
-            if (baseClass.Length == 0)
+            if (baseClass.Count == 0)
                 return false;
 
             if (baseClass.Any(x => x.ToString().Contains(BaseComponent)))
