@@ -50,7 +50,7 @@ namespace RoslynHECS
         private const string BaseComponent = "BaseComponent";
 
         private static bool resolversNeeded = true;
-        private static bool bluePrintsNeeded = true;
+        private static bool bluePrintsNeeded = false;
         private static bool commandMapneeded = true;
 
         static async Task Main(string[] args)

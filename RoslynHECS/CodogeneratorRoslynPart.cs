@@ -1011,14 +1011,14 @@ namespace HECSFramework.Core.Generator
 
                         if (validate.valid)
                         {
-                            var getNameSpace = GetNameSpace(field);
+                            var getNameSpace = GetNamespaces(field.Declaration.Type.ToString());
                             var getListNameSpace = GetListNameSpace(field);
 
                             if (getListNameSpace != string.Empty)
                                 AddUniqueSyntax(usings, new UsingSyntax(getListNameSpace));
 
-                            if (getNameSpace != string.Empty)
-                                AddUniqueSyntax(usings, new UsingSyntax(getNameSpace));
+                            foreach (var n in getNameSpace.Tree)
+                                AddUniqueSyntax(usings, n);
 
                             if (typeFields.Any(x => x.Order == validate.Order || x.FieldName == field.Declaration.Variables[0].Identifier.ToString()))
                                 continue;
