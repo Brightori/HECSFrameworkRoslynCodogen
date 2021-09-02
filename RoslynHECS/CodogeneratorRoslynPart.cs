@@ -5,6 +5,7 @@ using RoslynHECS;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Xml.Linq;
 
 namespace HECSFramework.Core.Generator
@@ -1947,6 +1948,121 @@ namespace HECSFramework.Core.Generator
             return new TabSimpleSyntax(3, $"{{{IndexGenerator.GetIndexForType(type.Identifier.ValueText)}, new CommandResolver<{type.Identifier.ValueText}>()}},");
         }
 
+        #endregion
+
+        #region Documentation
+
+        public string GetDocumentationRoslyn()
+        {
+            var tree = new TreeSyntaxNode();
+
+            tree.Add(new UsingSyntax("System.Collections.Generic", 1));
+            tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
+            tree.Add(new LeftScopeSyntax());
+            tree.Add(new TabSimpleSyntax(1, "public partial class HECSDocumentation"));
+            tree.Add(new LeftScopeSyntax(1));
+            tree.Add(GetDocumentationConstructorRoslyn());
+            tree.Add(new RightScopeSyntax(1));
+            tree.Add(new RightScopeSyntax());
+
+            return tree.ToString();
+        }
+
+        private ISyntax GetDocumentationConstructorRoslyn()
+        {
+            var tree = new TreeSyntaxNode();
+            tree.Add(new TabSimpleSyntax(2, "public HECSDocumentation()"));
+            tree.Add(new LeftScopeSyntax(2));
+            tree.Add(new TabSimpleSyntax(3, "Documentations = new List<DocumentationRepresentation>"));
+            tree.Add(new LeftScopeSyntax(3));
+            tree.Add(GetDocumentRepresentationArrayRoslyn());
+            tree.Add(new RightScopeSyntax(3, true));
+            tree.Add(new RightScopeSyntax(2));
+            return tree;
+        }
+
+        private ISyntax GetDocumentRepresentationArrayRoslyn()
+        {
+            var tree = new TreeSyntaxNode();
+
+            var typeHolder = new Dictionary<string, (List<string> segments, List<string> comments, string Type)>(64);
+
+            foreach (var t in Program.classes)
+            {
+                ProcessDocumentationAttribute(t, typeHolder);
+            }
+
+            //foreach (var collected in typeHolder)
+            //{
+            //    tree.Add(new TabSimpleSyntax(4, "new DocumentationRepresentation"));
+            //    tree.Add(new LeftScopeSyntax(4));
+            //    tree.Add(GetStringArrayRoslyn("SegmentTypes", collected.Value.segments));
+            //    tree.Add(GetStringArrayRoslyn("Comments", collected.Value.comments));
+            //    tree.Add(new TabSimpleSyntax(5, $"DataType = {CParse.Quote + collected.Value.Type + CParse.Quote},"));
+            //    tree.Add(GetDocumentationTypeRoslyn(collected.Key));
+            //    tree.Add(new RightScopeSyntax(4) { IsCommaNeeded = true });
+            //}
+            return tree;
+        }
+
+        public void ProcessDocumentationAttribute(TypeDeclarationSyntax type, Dictionary<string, (List<string> segments, List<string> comments, string Type)> typeHolder)
+        {
+            var attributes = type.ChildNodes().Where(x => x is AttributeListSyntax attribute && attribute.ToString().Contains("Documentation")).Select(z=> z as AttributeListSyntax);
+
+            if (attributes == null)
+                return;
+
+            var t = type.Identifier.Text;
+            
+            if (!typeHolder.ContainsKey(t))
+                typeHolder.Add(t, (new List<string>(), new List<string>(), t));
+
+            foreach (var a in attributes)
+            {
+                    //foreach (var d in documentation.SegmentType)
+                    //    typeHolder[t].segments.Add(d);
+
+                    //typeHolder[t].comments.Add(documentation.Comment);
+            }
+        }
+
+        private ISyntax GetDocumentationTypeRoslyn(Type type)
+        {
+            var tree = new TreeSyntaxNode();
+            string documentationType;
+
+            if (componentTypes.Contains(type))
+                documentationType = "DocumentationType.Component";
+            else if (systems.Contains(type))
+                documentationType = "DocumentationType.System";
+            else
+                documentationType = "DocumentationType.Common";
+
+            tree.Add(new TabSimpleSyntax(5, $"DocumentationType = {documentationType},"));
+
+            return tree;
+        }
+
+        private ISyntax GetStringArrayRoslyn(string name, List<string> toArray)
+        {
+            var tree = new TreeSyntaxNode();
+            var body = new TreeSyntaxNode();
+
+            tree.Add(new TabSimpleSyntax(5, $"{name} = new string[]"));
+            tree.Add(new LeftScopeSyntax(5));
+            tree.Add(body);
+            tree.Add(new CompositeSyntax(new TabSpaceSyntax(5), new SimpleSyntax(CParse.RightScope + CParse.Comma + CParse.Paragraph)));
+
+            foreach (var s in toArray)
+            {
+                if (string.IsNullOrEmpty(s))
+                    continue;
+
+                body.Add(new TabSimpleSyntax(6, $"{CParse.Quote + s + CParse.Quote + CParse.Comma}"));
+            }
+
+            return tree;
+        }
         #endregion
 
         #region Helpers

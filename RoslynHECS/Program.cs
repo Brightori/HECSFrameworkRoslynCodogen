@@ -136,6 +136,7 @@ namespace RoslynHECS
             SaveToFile(SystemBindings, processGeneration.GetSystemBindsByRoslyn(), HECSGenerated);
             SaveToFile(ComponentContext, processGeneration.GetComponentContextRoslyn(), HECSGenerated);
             SaveToFile(HecsMasks, processGeneration.GenerateHecsMasksRoslyn(), HECSGenerated);
+            //SaveToFile(Documentation, processGeneration.GetDocumentationRoslyn(), HECSGenerated); не получается нормально автоматизировать, слишком сложные параметры у атрибута
 
             if (resolversNeeded)
             {
