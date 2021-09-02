@@ -1121,7 +1121,6 @@ namespace HECSFramework.Core.Generator
                         continue;
 
                     var intValue = int.Parse(a.ArgumentList.Arguments.ToArray()[0].ToString());
-                    Console.WriteLine("нашли что надо");
                     return (true, intValue);
                 }
             }
