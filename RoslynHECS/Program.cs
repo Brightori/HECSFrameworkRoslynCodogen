@@ -30,8 +30,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> structs;
         public static List<InterfaceDeclarationSyntax> interfaces;
 
-        public static string ScriptsPath = @"D:\Develop\MiniLife\Assets\";
-        public static string HECSGenerated = @"D:\Develop\MiniLife\Assets\Scripts\HECSGenerated\";
+        public static string ScriptsPath = @"D:\Develop\CyberMafia\Assets\";
+        public static string HECSGenerated = @"D:\Develop\CyberMafia\Assets\Scripts\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
@@ -50,8 +50,8 @@ namespace RoslynHECS
         private const string BaseComponent = "BaseComponent";
 
         private static bool resolversNeeded = true;
-        private static bool bluePrintsNeeded = false;
-        private static bool commandMapneeded = true;
+        private static bool bluePrintsNeeded = true;
+        private static bool commandMapneeded = false;
 
         static async Task Main(string[] args)
         {
