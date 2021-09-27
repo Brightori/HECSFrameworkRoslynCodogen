@@ -717,10 +717,10 @@ namespace HECSFramework.Core.Generator
                 getHashCodeBody.Add(new TabSimpleSyntax(4, $"hash += ({(i + 1) * 3} * mask.Mask0{i + 1}.GetHashCode());"));
 
                 if (i == 0)
-                    isHaveBody.Add(new SimpleSyntax($"(original.Mask0{i + 1} & other.Mask0{i + 1}) != 0"));
+                    isHaveBody.Add(new SimpleSyntax($"(original.Mask0{i + 1} & other.Mask0{i + 1}) == other.Mask0{i + 1}"));
                 else
                     isHaveBody.Add(new CompositeSyntax(new ParagraphSyntax(), new TabSpaceSyntax(6),
-                        new SimpleSyntax("&&"), new SimpleSyntax($"(original.Mask0{i + 1} & other.Mask0{i + 1}) != 0")));
+                        new SimpleSyntax("&&"), new SimpleSyntax($"(original.Mask0{i + 1} & other.Mask0{i + 1}) == other.Mask0{i + 1}")));
 
                 if (i > 0)
                     hecsMaskPart.Add(new TabSimpleSyntax(2, $"public ulong Mask0{i + 1};"));
