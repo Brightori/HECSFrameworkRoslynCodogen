@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using ClassDeclarationSyntax = Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax;
 using SyntaxNode = Microsoft.CodeAnalysis.SyntaxNode;
@@ -56,8 +57,11 @@ namespace RoslynHECS
         static async Task Main(string[] args)
         {
             CheckArgs(args);
+
             Console.WriteLine($"Путь: {ScriptsPath}");
             Console.WriteLine($"Путь кодогена: {HECSGenerated}");
+            Console.WriteLine($"Найдены аргументы запуска: {string.Join(", ", args)}");
+            Console.WriteLine($"Доступные аргументы: {Environment.NewLine}{string.Join(Environment.NewLine, new[] { "path:путь_до_скриптов", "no_blueprints", "no_resolvers", "no_commands", "server" })}");
 
             var files = new DirectoryInfo(ScriptsPath).GetFiles("*.cs", SearchOption.AllDirectories);
             var list = new List<SyntaxTree>();
@@ -100,9 +104,7 @@ namespace RoslynHECS
             SaveFiles();
 
             Console.WriteLine("нашли компоненты " + components.Count);
-            Console.WriteLine($"Найдены аргументы запуска: {string.Join(", ", args)}");
-            Console.WriteLine($"Доступные аргументы: {Environment.NewLine}{string.Join(Environment.NewLine, new[] { "path:путь_до_скриптов", "no_blueprints", "no_resolvers", "no_commands", "server" })}");
-            Console.ReadKey();
+            Thread.Sleep(1500);
         }
 
         private static void CheckArgs(string[] args)
