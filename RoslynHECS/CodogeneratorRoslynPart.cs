@@ -338,31 +338,20 @@ namespace HECSFramework.Core.Generator
 
         public int[] CalculateIndexesForMaskRoslyn(int index, int fieldCounts)
         {
-            var t = new List<int>(new int[fieldCounts + 1]);
+            var t = new List<int>(new int[fieldCounts]);
+            
+            var ulongMaxBit = 63;
+            var calculate = index + 1;
+            var intPart = calculate / ulongMaxBit;
+            var fractPart = calculate % ulongMaxBit;
 
-            var calculate = index;
-
-            for (int i = 0; i < fieldCounts; i++)
+            if (fractPart == 0)
             {
-                if (calculate + 2 > 63)
-                {
-                    t[i] = 63;
-                    calculate -= 61;
-                    continue;
-                }
-
-                if (calculate < 63 && calculate >= 0)
-                {
-                    t[i] = calculate + 2;
-                    calculate -= 100;
-                    continue;
-                }
-
-                else if (calculate < 0)
-                {
-                    t[i] = 0;
-                }
+                fractPart = ulongMaxBit;
+                intPart -= 1;
             }
+            
+            t[intPart] = fractPart;
 
             return t.ToArray();
         }
