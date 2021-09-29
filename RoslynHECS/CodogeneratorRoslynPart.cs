@@ -315,23 +315,7 @@ namespace HECSFramework.Core.Generator
             var maskSplitToArray = CalculateIndexesForMaskRoslyn(index, fieldCount);
 
             maskBody.Add(new TabSimpleSyntax(5, $"Index = {index},"));
-
-            for (int i = 0; i < fieldCount; i++)
-            {
-                if (maskSplitToArray[fieldCount - 1] > 1 && i < fieldCount - 1)
-                {
-                    maskBody.Add(new CompositeSyntax(new TabSpaceSyntax(5), new SimpleSyntax($"Mask0{i + 1} = 1ul << {0},")));
-                    maskBody.Add(new ParagraphSyntax());
-                    continue;
-                }
-
-                maskBody.Add(new CompositeSyntax(new TabSpaceSyntax(5), new SimpleSyntax($"Mask0{i + 1} = 1ul << {maskSplitToArray[i]},")));
-
-                if (i > fieldCount - 1)
-                    continue;
-
-                maskBody.Add(new ParagraphSyntax());
-            }
+            maskBody.Add(new TabSimpleSyntax(5, $"TypeHashCode = {IndexGenerator.GenerateIndex(c.Identifier.ValueText)},"));
 
             return composite;
         }
@@ -386,26 +370,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(new RightScopeSyntax(4, true));
 
             maskBody.Add(new TabSimpleSyntax(5, $"Index = {index},"));
-
-            var maskSplitToArray = CalculateIndexesForMask(index, fieldCount);
-
-            for (int i = 0; i < fieldCount; i++)
-            {
-                if (maskSplitToArray[fieldCount - 1] > 1 && i < fieldCount - 1)
-                {
-                    maskBody.Add(new CompositeSyntax(new TabSpaceSyntax(5), new SimpleSyntax($"Mask0{i + 1} = 1ul << {0},")));
-                    maskBody.Add(new ParagraphSyntax());
-                    continue;
-                }
-
-                maskBody.Add(new CompositeSyntax(new TabSpaceSyntax(5), new SimpleSyntax($"Mask0{i + 1} = 1ul << {maskSplitToArray[i]},")));
-
-                if (i > fieldCount - 1)
-                    continue;
-
-                maskBody.Add(new ParagraphSyntax());
-            }
-
+            maskBody.Add(new TabSimpleSyntax(5, $"TypeHashCode = {IndexGenerator.GenerateIndex(c.Identifier.ValueText)},"));
             return tree;
         }
 

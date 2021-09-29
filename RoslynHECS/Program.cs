@@ -134,7 +134,7 @@ namespace RoslynHECS
         {
             var processGeneration = new CodeGenerator();
             SaveToFile(TypeProvider, processGeneration.GenerateTypesMapRoslyn(), HECSGenerated);
-            SaveToFile(MaskProvider, processGeneration.GenerateMaskProviderRoslyn(), HECSGenerated);
+            //SaveToFile(MaskProvider, processGeneration.GenerateMaskProviderRoslyn(), HECSGenerated);
             SaveToFile(SystemBindings, processGeneration.GetSystemBindsByRoslyn(), HECSGenerated);
             SaveToFile(ComponentContext, processGeneration.GetComponentContextRoslyn(), HECSGenerated);
             SaveToFile(HecsMasks, processGeneration.GenerateHecsMasksRoslyn(), HECSGenerated);
