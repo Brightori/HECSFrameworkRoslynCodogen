@@ -5,8 +5,6 @@ using RoslynHECS;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using System.Xml.Linq;
 
 namespace HECSFramework.Core.Generator
 {
@@ -15,6 +13,7 @@ namespace HECSFramework.Core.Generator
         public HashSet<ClassDeclarationSyntax> needResolver = new HashSet<ClassDeclarationSyntax>();
         public List<ClassDeclarationSyntax> containersSolve = new List<ClassDeclarationSyntax>();
         public List<Type> commands = new List<Type>();
+        public List<string> alrdyAtContext = new List<string>();
         public const string Resolver = "Resolver";
         public const string Cs = ".cs";
         private string ResolverContainer = "ResolverDataContainer";
@@ -488,6 +487,8 @@ namespace HECSFramework.Core.Generator
             {
                 var name = c.Identifier.ValueText;
 
+                var componentsTest = Program.componentsDeclarations.Select(x => x.Identifier.Value).OrderBy(x=> x).ToList();
+
                 properties.Add(new CompositeSyntax(new TabSpaceSyntax(2),
                     new SimpleSyntax($"public {name} Get{name} {{ get; private set; }}"), new ParagraphSyntax()));
 
@@ -915,6 +916,7 @@ namespace HECSFramework.Core.Generator
             usings.Add(new UsingSyntax("Components"));
             usings.Add(new UsingSyntax("System"));
             usings.Add(new UsingSyntax("MessagePack"));
+            usings.Add(new UsingSyntax("Commands"));
 
             tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
             tree.Add(new LeftScopeSyntax());

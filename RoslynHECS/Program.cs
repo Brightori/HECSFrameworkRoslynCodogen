@@ -19,20 +19,21 @@ namespace RoslynHECS
 {
     class Program
     {
-        public static List<string> components = new List<string>(256);
-        public static List<string> systems = new List<string>(256);
-        public static List<ClassDeclarationSyntax> componentsDeclarations = new List<ClassDeclarationSyntax>(256);
-        public static List<ClassDeclarationSyntax> systemsDeclarations = new List<ClassDeclarationSyntax>(256);
-        public static List<StructDeclarationSyntax> globalCommands = new List<StructDeclarationSyntax>(256);
-        public static List<StructDeclarationSyntax> localCommands = new List<StructDeclarationSyntax>(256);
-        public static List<StructDeclarationSyntax> networkCommands = new List<StructDeclarationSyntax>(256);
-        
+        public static List<string> components = new List<string>(2048);
+        public static List<string> systems = new List<string>(2048);
+        public static List<ClassDeclarationSyntax> componentsDeclarations = new List<ClassDeclarationSyntax>(2048);
+        public static List<ClassDeclarationSyntax> allComponentsDeclarations = new List<ClassDeclarationSyntax>(2048);
+        public static List<ClassDeclarationSyntax> systemsDeclarations = new List<ClassDeclarationSyntax>(2048);
+        public static List<StructDeclarationSyntax> globalCommands = new List<StructDeclarationSyntax>(2048);
+        public static List<StructDeclarationSyntax> localCommands = new List<StructDeclarationSyntax>(2048);
+        public static List<StructDeclarationSyntax> networkCommands = new List<StructDeclarationSyntax>(2048);
+
         public static List<ClassDeclarationSyntax> classes;
         public static List<StructDeclarationSyntax> structs;
         public static List<InterfaceDeclarationSyntax> interfaces;
 
-        public static string ScriptsPath = @"D:\Develop\CyberMafia\Assets\";
-        public static string HECSGenerated = @"D:\Develop\CyberMafia\Assets\Scripts\HECSGenerated\";
+        public static string ScriptsPath = @"D:\Develop\MinilifeRTS\Assets\";
+        public static string HECSGenerated = @"D:\Develop\MinilifeRTS\Assets\Scripts\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
@@ -63,8 +64,13 @@ namespace RoslynHECS
             Console.WriteLine($"Найдены аргументы запуска: {string.Join(", ", args)}");
             Console.WriteLine($"Доступные аргументы: {Environment.NewLine}{string.Join(Environment.NewLine, new[] { "path:путь_до_скриптов", "no_blueprints", "no_resolvers", "no_commands", "server" })}");
 
-            var files = new DirectoryInfo(ScriptsPath).GetFiles("*.cs", SearchOption.AllDirectories);
-            var list = new List<SyntaxTree>();
+            var test = Directory.GetDirectories(ScriptsPath);
+
+            //var files = new DirectoryInfo(ScriptsPath).GetFiles("*.cs", SearchOption.AllDirectories);
+            var files = new DirectoryInfo(ScriptsPath).GetFiles("*.cs", SearchOption.AllDirectories).Where(x => !x.FullName.Contains("\\Plugins") && !x.FullName.Contains("\\HECSGenerated") && !x.FullName.Contains("\\MessagePack")).ToList();
+            Console.WriteLine(files.Count);
+
+            var list = new List<SyntaxTree>(2048);
 
             foreach (var f in files)
             {
@@ -96,30 +102,29 @@ namespace RoslynHECS
                 //Console.WriteLine(c.Identifier.ValueText);
                 ProcessClasses(c);
             }
-                
 
             foreach (var s in structs)
                 ProcessStructs(s);
 
-            SaveFiles();
-
             Console.WriteLine("нашли компоненты " + components.Count);
-            Thread.Sleep(1500);
+            SaveFiles();
+            Console.WriteLine("успешно сохранено");
+            //Thread.Sleep(1500);
         }
 
         private static void CheckArgs(string[] args)
-		{
+        {
             if (args == null || args.Length == 0)
                 return;
 
-            var path = args.SingleOrDefault(a => a.Contains("path:"))?.Replace("path:","").TrimStart('-');
+            var path = args.SingleOrDefault(a => a.Contains("path:"))?.Replace("path:", "").TrimStart('-');
             var server = args.Any(a => a.Contains("server"));
             if (path != null)
             {
                 ScriptsPath = path;
                 ScriptsPath = Path.GetFullPath(ScriptsPath);
                 if (!ScriptsPath.EndsWith(Path.DirectorySeparatorChar.ToString())) ScriptsPath += Path.DirectorySeparatorChar;
-                
+
                 HECSGenerated = server ? Path.Combine(ScriptsPath, "HECSGenerated") : Path.Combine(ScriptsPath, "Scripts", "HECSGenerated");
                 HECSGenerated = Path.GetFullPath(HECSGenerated);
                 if (!HECSGenerated.EndsWith(Path.DirectorySeparatorChar.ToString())) HECSGenerated += Path.DirectorySeparatorChar;
@@ -172,7 +177,7 @@ namespace RoslynHECS
                 foreach (var c in systemsBPFiles)
                     SaveToFile(c.name, c.classBody, ScriptsPath + SystemsBluePrintsPath);
 
-                SaveToFile(BluePrintsProvider, processGeneration.GetBluePrintsProvider(),HECSGenerated, needToImport: true);
+                SaveToFile(BluePrintsProvider, processGeneration.GetBluePrintsProvider(), HECSGenerated, needToImport: true);
             }
         }
 
@@ -217,7 +222,7 @@ namespace RoslynHECS
             if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains(typeof(IGlobalCommand).Name)))
             {
                 globalCommands.AddOrRemoveElement(s, true);
-                localCommands.AddOrRemoveElement(s,true);
+                localCommands.AddOrRemoveElement(s, true);
                 Console.WriteLine("нашли глобальную команду " + structCurrent);
             }
 
@@ -225,8 +230,8 @@ namespace RoslynHECS
             {
                 localCommands.AddOrRemoveElement(s, true);
                 Console.WriteLine("нашли локальную команду " + structCurrent);
-            }    
-            
+            }
+
             if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains("INetworkCommand")))
             {
                 globalCommands.AddOrRemoveElement(s, true);
@@ -250,34 +255,39 @@ namespace RoslynHECS
             var classCurrent = c.Identifier.ValueText;
 
             //todo это костыль для избегания рекурсий из за дженериков в которые передаётся аргументом тип реализатора
-            //можно попробать добавить счётчик или запилить проверку 
+            //можно попробать добавить счётчик или запилить проверку чтобы прервать бесконечную рекурсию
             if (c.ConstraintClauses != null && c.ConstraintClauses.Count > 0)
                 return;
 
             var baseClass = c.BaseList != null ? c.BaseList.ChildNodes()?.ToArray() : new SyntaxNode[0];
-                var isAbstract = c.Modifiers.Any(x => x.IsKind(SyntaxKind.AbstractKeyword));
+            var isAbstract = c.Modifiers.Any(x => x.IsKind(SyntaxKind.AbstractKeyword));
 
-                if (IsComponent(c) && !isAbstract)
-                {
-                    if (components.Contains(classCurrent))
-                        return;
+            if (IsComponent(c))
+            {
+                allComponentsDeclarations.Add(c); //сюда мы добавляем всё подряд, так как у нас могут быть партиал классы которые повторяются
 
-                    components.Add(classCurrent);
-                    componentsDeclarations.Add(c);
-                    Console.WriteLine("нашли компонент " + classCurrent);
-                }
+                if (isAbstract)
+                    return;
 
-                if (IsSystem(c) && !isAbstract && !classCurrent.Contains("SystemBluePrint"))
-                {
-                    if (systems.Contains(classCurrent))
-                        return;
+                if (components.Contains(classCurrent))
+                    return;
 
-                    systems.Add(classCurrent);
-                    systemsDeclarations.Add(c);
+                components.Add(classCurrent);
+                componentsDeclarations.Add(c);
+                Console.WriteLine("нашли компонент " + classCurrent);
+            }
 
-                    Console.WriteLine("----");
-                    Console.WriteLine("нашли систему " + classCurrent);
-                }
+            if (IsSystem(c) && !isAbstract && !classCurrent.Contains("SystemBluePrint"))
+            {
+                if (systems.Contains(classCurrent))
+                    return;
+
+                systems.Add(classCurrent);
+                systemsDeclarations.Add(c);
+
+                Console.WriteLine("----");
+                Console.WriteLine("нашли систему " + classCurrent);
+            }
         }
 
         private static bool IsComponent(ClassDeclarationSyntax c)
@@ -312,7 +322,7 @@ namespace RoslynHECS
                 return true;
 
             var gatherParents = classes.Where(x => baseClass.Any(z => z.ToString() == x.Identifier.ValueText));
-
+            //todo не совсем понятно что будет с вложенностью где несколько систем и они партиал, скорее всего тут дырка в логике
             foreach (var parent in gatherParents)
             {
                 if (IsSystem(parent))
@@ -326,7 +336,7 @@ namespace RoslynHECS
         {
             public ClassVirtualizationVisitor()
             {
-                Classes = new List<ClassDeclarationSyntax>();
+                Classes = new List<ClassDeclarationSyntax>(2048);
             }
 
             public List<ClassDeclarationSyntax> Classes { get; set; }
@@ -343,7 +353,7 @@ namespace RoslynHECS
         {
             public StructVirtualizationVisitor()
             {
-                Structs = new List<StructDeclarationSyntax>();
+                Structs = new List<StructDeclarationSyntax>(2048);
             }
 
             public List<StructDeclarationSyntax> Structs { get; set; }
@@ -354,22 +364,22 @@ namespace RoslynHECS
                 Structs.Add(node); // save your visited classes
                 return node;
             }
-        }        
-        
+        }
+
         class InterfaceVirtualizationVisitor : CSharpSyntaxRewriter
         {
             public List<InterfaceDeclarationSyntax> Interfaces { get; set; }
-            
+
             public InterfaceVirtualizationVisitor()
             {
-                Interfaces = new List<InterfaceDeclarationSyntax>();
+                Interfaces = new List<InterfaceDeclarationSyntax>(2048);
             }
 
             public override SyntaxNode Visit(SyntaxNode node)
             {
                 if (node is InterfaceDeclarationSyntax inter)
                     VisitInterfaceDeclaration(inter);
-                
+
                 return base.Visit(node);
             }
 
