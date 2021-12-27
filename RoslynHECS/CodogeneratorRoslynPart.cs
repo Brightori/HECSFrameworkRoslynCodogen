@@ -1420,7 +1420,7 @@ namespace HECSFramework.Core.Generator
             {
                 if (a.ToString().Contains("Field") && property.Modifiers.ToString().Contains("public"))
                 {
-                    var intValue = int.Parse(a.ArgumentList.Arguments.ToArray()[0].ToString());
+                    var intValue = int.Parse(a.ArgumentList?.Arguments.ToArray()[0].ToString() ?? "0");
                     return (true, intValue);
                 }
             }
