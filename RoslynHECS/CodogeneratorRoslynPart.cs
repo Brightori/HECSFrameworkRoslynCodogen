@@ -262,7 +262,7 @@ namespace HECSFramework.Core.Generator
 
             for (int i = 0; i < Program.componentsDeclarations.Count; i++)
             {
-                dicBody.Add(new TabSimpleSyntax(4, $"{{ typeof({Program.componentsDeclarations[i].Identifier.ValueText}), {i} }},"));
+                dicBody.Add(new TabSimpleSyntax(4, $"{{ typeof({Program.componentsDeclarations[i].Identifier.ValueText}), {i+1} }},"));
             }
 
             return tree;
@@ -313,7 +313,7 @@ namespace HECSFramework.Core.Generator
 
             var maskSplitToArray = CalculateIndexesForMaskRoslyn(index, fieldCount);
 
-            maskBody.Add(new TabSimpleSyntax(5, $"Index = {index},"));
+            maskBody.Add(new TabSimpleSyntax(5, $"Index = {index+1},"));
             maskBody.Add(new TabSimpleSyntax(5, $"TypeHashCode = {IndexGenerator.GenerateIndex(c.Identifier.ValueText)},"));
 
             return composite;
@@ -368,7 +368,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(maskBody);
             tree.Add(new RightScopeSyntax(4, true));
 
-            maskBody.Add(new TabSimpleSyntax(5, $"Index = {index},"));
+            maskBody.Add(new TabSimpleSyntax(5, $"Index = {index+1},"));
             maskBody.Add(new TabSimpleSyntax(5, $"TypeHashCode = {IndexGenerator.GenerateIndex(c.Identifier.ValueText)},"));
             return tree;
         }
