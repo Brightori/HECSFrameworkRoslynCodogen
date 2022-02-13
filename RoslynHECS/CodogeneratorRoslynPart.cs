@@ -5,6 +5,7 @@ using RoslynHECS;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 namespace HECSFramework.Core.Generator
 {
@@ -18,28 +19,175 @@ namespace HECSFramework.Core.Generator
         public const string Cs = ".cs";
         private string ResolverContainer = "ResolverDataContainer";
         public const string BluePrint = "BluePrint";
+        public const string ContextSetter = "ContextSetter";
+
+        public const string SystemBindSetter = "SystemBindSetter";
+        public const string ISystemSetter = "ISystemSetter";
+        public const string SystemBindContainer = "SystemBindContainer";
+
+        public const string IReactGlobalCommand = "IReactGlobalCommand";
+        public const string IReactCommand = "IReactCommand";
+        public const string IReactComponentLocal = "IReactComponentLocal";
+        public const string IReactComponentGlobal = "IReactComponentGlobal";
+        public const string CurrentSystem = "currentSystem";
+
 
         #region SystemsBinding
         public string GetSystemBindsByRoslyn()
         {
             var tree = new TreeSyntaxNode();
             var bindSystemFunc = new TreeSyntaxNode();
+
+            tree.Add(new UsingSyntax("Systems"));
+            tree.Add(new UsingSyntax("Components"));
             tree.Add(new UsingSyntax("Commands", 1));
             tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
             tree.Add(new LeftScopeSyntax());
-            tree.Add(new TabSimpleSyntax(1, "public partial class RegisterService"));
+            tree.Add(GetContaineresForSystems());
+            tree.Add(new TabSimpleSyntax(1, "public static partial class TypesMap"));
             tree.Add(new LeftScopeSyntax(1));
             tree.Add(bindSystemFunc);
             tree.Add(new RightScopeSyntax(1));
             tree.Add(new RightScopeSyntax());
 
-            bindSystemFunc.Add(new TabSimpleSyntax(2, "partial void BindSystem(ISystem system)"));
+            bindSystemFunc.Add(new TabSimpleSyntax(2, "partial void SetSystemSetters()"));
             bindSystemFunc.Add(new LeftScopeSyntax(2));
             bindSystemFunc.Add(GetGlobalBindingsRoslyn());
             bindSystemFunc.Add(GetLocalBindingsRoslyn());
             bindSystemFunc.Add(new RightScopeSyntax(2));
 
             return tree.ToString();
+        }
+
+        /// <summary>
+        /// тут мы получаем все контейнеры для систем
+        /// </summary>
+        /// <returns></returns>
+        private ISyntax GetContaineresForSystems()
+        {
+            var tree = new TreeSyntaxNode();
+
+            foreach (var system in Program.systems)
+            {
+                //собираем парт системы если они есть
+                var allParts = Program.systemsDeclarations.Where(x => x.Identifier.ValueText == system);
+                tree.Add(GetSystemContainer(system, out var bindContainerBody, out var unbindContainer, out var systemPlace, out var fields));
+
+                //смотрим каждую из частей
+                foreach (var systemPart in allParts)
+                {
+                    var baseList = systemPart.BaseList;
+
+                    if (baseList == null) continue;
+
+                    var root = baseList.DescendantNodes();
+
+                    if (root == null) continue;
+
+                    //смотрим список интерфейсов и предков, если есть дженерики, смотрим что из них нам подходит
+                    foreach (var part in root)
+                    {
+                        if (part is GenericNameSyntax genericSyntax)
+                        {
+                            var argumentName = genericSyntax.TypeArgumentList.Arguments[0];
+
+                            switch (genericSyntax.Identifier.ValueText)
+                            {
+                                case IReactCommand:
+                                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.EntityCommandService.AddListener<{argumentName}>(system, {CurrentSystem}.CommandReact);"));
+                                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.EntityCommandService.RemoveListener<{argumentName}>(system);"));
+                                    break;
+                                case IReactGlobalCommand:
+                                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactCommand<{argumentName}>(system, {CurrentSystem}.CommandGlobalReact);"));
+                                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactCommand<{argumentName}>(system);"));
+                                    break;
+                                case IReactComponentLocal:
+                                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.AddListener<{argumentName}>(system, currentSystem.ComponentReact);"));
+                                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.RemoveListener(system);"));
+                                    break;
+                                case IReactComponentGlobal:
+                                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactComponent<{argumentName}>(system, {CurrentSystem}.ComponentReactGlobal);"));
+                                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactComponent(system);"));
+                                    break;
+                            }
+
+                            var arg = genericSyntax.TypeArgumentList.Arguments;
+                        }
+                    }
+
+                    var attributes = systemPart.DescendantNodes().OfType<AttributeListSyntax>();
+
+                    if (attributes != null)
+                    {
+                        foreach (var attribute in attributes)
+                        {
+                            if (attribute.Attributes.Any(x => x.ToString().Contains("Required")))
+                            {
+                                if (attribute.Parent is FieldDeclarationSyntax field)
+                                {
+                                    if (field.Modifiers.Any(x => x.ToString().Contains("private")))
+                                    {
+                                        SetPrivateComponentBinder(field, system, fields, bindContainerBody);
+                                    }
+                                    else
+                                    {
+
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                //если есть что биндить, добавляем каст системы к нужному типу
+                if (bindContainerBody.Tree.Count > 0)
+                    systemPlace.Tree.Add(new TabSimpleSyntax(3, $"var {CurrentSystem} = ({system})system;"));
+            }
+
+            return tree;
+        }
+
+        private void SetPrivateComponentBinder(FieldDeclarationSyntax fieldDeclaration, string system, ISyntax fields, ISyntax binder)
+        {
+            var fieldType = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax).ToString();
+            var fieldName = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is VariableDeclaratorSyntax).ToString();
+
+            fields.Tree.Add(new TabSimpleSyntax(1, $"private FieldInfo {fieldName}FieldBinding = typeof({system}).GetField({CParse.Quote}{fieldName}{CParse.Quote}, BindingFlags.Instance | BindingFlags.NonPublic);"));
+            binder.Tree.Add(new TabSimpleSyntax(3, ""));
+        }
+
+        /// <summary>
+        /// тут мы получаем контейнер для конкретной системы
+        /// </summary>
+        private ISyntax GetSystemContainer(string systemName, out ISyntax bind, out ISyntax unbind, out ISyntax systemPlace, out ISyntax fields)
+        {
+            var tree = new TreeSyntaxNode();
+            var bindBody = new TreeSyntaxNode();
+            var unbindBody = new TreeSyntaxNode();
+            var currentSystemPlace = new TreeSyntaxNode();
+            var currentFields = new TreeSyntaxNode();
+
+            fields = currentFields;
+            bind = bindBody;
+            unbind = unbindBody;
+            tree.Add(new TabSimpleSyntax(1, $"public sealed class {systemName}{SystemBindContainer} : {ISystemSetter}"));
+            tree.Add(new LeftScopeSyntax(1));
+            tree.Add(currentFields);
+            tree.Add(new ParagraphSyntax());
+            tree.Add(new TabSimpleSyntax(2, "public void BindSystem(ISystem system)"));
+            tree.Add(new LeftScopeSyntax(2));
+            tree.Add(currentSystemPlace);
+            tree.Add(bindBody);
+            tree.Add(new RightScopeSyntax(2));
+            tree.Add(new ParagraphSyntax());
+            tree.Add(new TabSimpleSyntax(2, "public void UnBindSystem(ISystem system)"));
+            tree.Add(new LeftScopeSyntax(2));
+            tree.Add(unbindBody);
+            tree.Add(new RightScopeSyntax(2));
+            tree.Add(new RightScopeSyntax(1));
+
+            systemPlace = currentSystemPlace;
+            return tree;
         }
 
         private ISyntax GetGlobalBindingsRoslyn()
@@ -94,6 +242,7 @@ namespace HECSFramework.Core.Generator
 
             tree.Add(new NameSpaceSyntax(DefaultNameSpace));
             tree.Add(new LeftScopeSyntax());
+            tree.Add(GetAdditionalTypesMap());
             tree.Add(new CompositeSyntax(new TabSpaceSyntax(1), new SimpleSyntax($"public partial class {typeof(TypesProvider).Name}"), new ParagraphSyntax()));
             tree.Add(new LeftScopeSyntax(1));
             tree.Add(new TabSimpleSyntax(2, "public TypesProvider()"));
@@ -262,7 +411,7 @@ namespace HECSFramework.Core.Generator
 
             for (int i = 0; i < Program.componentsDeclarations.Count; i++)
             {
-                dicBody.Add(new TabSimpleSyntax(4, $"{{ typeof({Program.componentsDeclarations[i].Identifier.ValueText}), {i+1} }},"));
+                dicBody.Add(new TabSimpleSyntax(4, $"{{ typeof({Program.componentsDeclarations[i].Identifier.ValueText}), {i + 1} }},"));
             }
 
             return tree;
@@ -313,7 +462,7 @@ namespace HECSFramework.Core.Generator
 
             var maskSplitToArray = CalculateIndexesForMaskRoslyn(index, fieldCount);
 
-            maskBody.Add(new TabSimpleSyntax(5, $"Index = {index+1},"));
+            maskBody.Add(new TabSimpleSyntax(5, $"Index = {index + 1},"));
             maskBody.Add(new TabSimpleSyntax(5, $"TypeHashCode = {IndexGenerator.GenerateIndex(c.Identifier.ValueText)},"));
 
             return composite;
@@ -322,7 +471,7 @@ namespace HECSFramework.Core.Generator
         public int[] CalculateIndexesForMaskRoslyn(int index, int fieldCounts)
         {
             var t = new List<int>(new int[fieldCounts]);
-            
+
             var ulongMaxBit = 63;
             var calculate = index + 1;
             var intPart = calculate / ulongMaxBit;
@@ -333,10 +482,80 @@ namespace HECSFramework.Core.Generator
                 fractPart = ulongMaxBit;
                 intPart -= 1;
             }
-            
+
             t[intPart] = fractPart;
 
             return t.ToArray();
+        }
+        #endregion
+
+        #region GenerateTypesMapComponentContext
+
+        /// <summary>
+        /// тут мы добавляем часть тайп мапы, которая отвечает за контейнеры компонентов
+        /// </summary>
+        /// <returns></returns>
+        private ISyntax GetAdditionalTypesMap()
+        {
+            var overTree = new TreeSyntaxNode();
+            overTree.Add(GetContextContainers());
+            overTree.Add(new ParagraphSyntax());
+            overTree.Add(new TabSimpleSyntax(0, "public static partial class TypesMap"));
+            overTree.Add(new LeftScopeSyntax());
+            overTree.Add(GetTypesMapContext());
+            overTree.Add(new RightScopeSyntax());
+
+            return overTree;
+        }
+
+        private ISyntax GetContextContainers()
+        {
+            var tree = new TreeSyntaxNode();
+
+            for (int i = 0; i < Program.componentsDeclarations.Count; i++)
+            {
+                var component = Program.componentsDeclarations[i];
+                tree.Add(new TabSimpleSyntax(1, $"public sealed class {component.Identifier.ValueText}{ContextSetter} : IComponentContextSetter "));
+                tree.Add(new LeftScopeSyntax(1));
+                tree.Add(new TabSimpleSyntax(2, "public void SetComponent(IEntity entity, IComponent component)"));
+                tree.Add(new LeftScopeSyntax(2));
+                tree.Add(new TabSimpleSyntax(3, $"entity.ComponentContext.Get{component.Identifier.ValueText} = ({component.Identifier.ValueText})component;"));
+                tree.Add(new RightScopeSyntax(2));
+                tree.Add(new TabSimpleSyntax(2, "public void RemoveComponent(IEntity entity, IComponent component)"));
+                tree.Add(new LeftScopeSyntax(2));
+                tree.Add(new TabSimpleSyntax(3, $"entity.ComponentContext.Get{component.Identifier.ValueText} = null;"));
+                tree.Add(new RightScopeSyntax(2));
+                tree.Add(new RightScopeSyntax(1));
+
+                if (i < Program.componentsDeclarations.Count - 1)
+                    tree.Add(new ParagraphSyntax());
+            }
+
+            return tree;
+        }
+
+        private ISyntax GetTypesMapContext()
+        {
+            var tree = new TreeSyntaxNode();
+            var dictionaryBody = new TreeSyntaxNode();
+
+            tree.Add(new TabSimpleSyntax(1, "static partial void SetComponentsSetters()"));
+            tree.Add(new LeftScopeSyntax(1));
+            tree.Add(new TabSimpleSyntax(2, "componentsSetters = new Dictionary<int, IComponentContextSetter>(256)"));
+            tree.Add(new LeftScopeSyntax(2));
+            tree.Add(dictionaryBody);
+            tree.Add(new RightScopeSyntax(2, true));
+            tree.Add(new RightScopeSyntax(1));
+
+            var count = Program.componentsDeclarations.Count;
+
+            for (int i = 0; i < count; i++)
+            {
+                var component = Program.componentsDeclarations[i];
+                dictionaryBody.Add(new TabSimpleSyntax(3, $"{CParse.LeftScope}{i + 1}, new {component.Identifier.ValueText}{ContextSetter}(){CParse.RightScope},"));
+            }
+
+            return tree;
         }
         #endregion
 
@@ -368,7 +587,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(maskBody);
             tree.Add(new RightScopeSyntax(4, true));
 
-            maskBody.Add(new TabSimpleSyntax(5, $"Index = {index+1},"));
+            maskBody.Add(new TabSimpleSyntax(5, $"Index = {index + 1},"));
             maskBody.Add(new TabSimpleSyntax(5, $"TypeHashCode = {IndexGenerator.GenerateIndex(c.Identifier.ValueText)},"));
             return tree;
         }
@@ -452,11 +671,9 @@ namespace HECSFramework.Core.Generator
             tree.Add(new NameSpaceSyntax(DefaultNameSpace));
             tree.Add(new LeftScopeSyntax());
 
-            tree.Add(new CompositeSyntax(new TabSpaceSyntax(1), new SimpleSyntax("public partial class ComponentContext : IDisposable"), new ParagraphSyntax()));
+            tree.Add(new CompositeSyntax(new TabSpaceSyntax(1), new SimpleSyntax("public partial class ComponentContext"), new ParagraphSyntax()));
             tree.Add(new LeftScopeSyntax(1));
             tree.Add(properties);
-            tree.Add(switchAdd);
-            tree.Add(switchRemove);
             tree.Add(disposable);
             tree.Add(new RightScopeSyntax(1));
             tree.Add(new RightScopeSyntax());
@@ -487,29 +704,13 @@ namespace HECSFramework.Core.Generator
             {
                 var name = c.Identifier.ValueText;
 
-                var componentsTest = Program.componentsDeclarations.Select(x => x.Identifier.Value).OrderBy(x=> x).ToList();
+                var componentsTest = Program.componentsDeclarations.Select(x => x.Identifier.Value).OrderBy(x => x).ToList();
 
                 properties.Add(new CompositeSyntax(new TabSpaceSyntax(2),
-                    new SimpleSyntax($"public {name} Get{name} {{ get; private set; }}"), new ParagraphSyntax()));
+                    new SimpleSyntax($"public {name} Get{name};"), new ParagraphSyntax()));
 
                 var cArgument = name;
                 var fixedArg = char.ToLower(cArgument[0]) + cArgument.Substring(1);
-
-                switchBody.Add(new CompositeSyntax(new TabSpaceSyntax(4), new SimpleSyntax($"case {name} {fixedArg}:"), new ParagraphSyntax()));
-                switchBody.Add(new LeftScopeSyntax(5));
-                switchBody.Add(new CompositeSyntax(new TabSpaceSyntax(6), new SimpleSyntax($"Get{name} = {fixedArg};"), new ParagraphSyntax()));
-                switchBody.Add(new CompositeSyntax(new TabSpaceSyntax(6), new ReturnSyntax()));
-                switchBody.Add(new RightScopeSyntax(5));
-
-                switchRemoveBody.Add(new CompositeSyntax(new TabSpaceSyntax(4), new SimpleSyntax($"case {name} {fixedArg}:"), new ParagraphSyntax()));
-                switchRemoveBody.Add(new LeftScopeSyntax(5));
-                switchRemoveBody.Add(new CompositeSyntax(new TabSpaceSyntax(6), new SimpleSyntax($"Get{name} = null;"), new ParagraphSyntax()));
-                switchRemoveBody.Add(new CompositeSyntax(new TabSpaceSyntax(6), new ReturnSyntax()));
-                switchRemoveBody.Add(new RightScopeSyntax(5));
-
-                disposableBody.Add(new CompositeSyntax(new TabSpaceSyntax(3), new SimpleSyntax($"Get{name} = null;"), new ParagraphSyntax()));
-                //if (c != componentTypes.Last())
-                //    switchBody.Add(new ParagraphSyntax());
 
                 var t = c.SyntaxTree.GetRoot().ChildNodes();
 
@@ -531,15 +732,6 @@ namespace HECSFramework.Core.Generator
 
             usings.Add(new UsingSyntax("System", 1));
             usings.Add(new UsingSyntax("System.Runtime.CompilerServices", 1));
-
-
-            disposable.Add(new ParagraphSyntax());
-            disposable.Add(new CompositeSyntax(new TabSpaceSyntax(2), new SimpleSyntax("public void Dispose()"), new ParagraphSyntax()));
-            disposable.Add(new LeftScopeSyntax(2));
-            disposable.Add(disposableBody);
-            disposable.Add(new RightScopeSyntax(2));
-
-
             return overTree.ToString();
         }
 
@@ -1963,22 +2155,22 @@ namespace HECSFramework.Core.Generator
 
         public void ProcessDocumentationAttribute(TypeDeclarationSyntax type, Dictionary<string, (List<string> segments, List<string> comments, string Type)> typeHolder)
         {
-            var attributes = type.ChildNodes().Where(x => x is AttributeListSyntax attribute && attribute.ToString().Contains("Documentation")).Select(z=> z as AttributeListSyntax);
+            var attributes = type.ChildNodes().Where(x => x is AttributeListSyntax attribute && attribute.ToString().Contains("Documentation")).Select(z => z as AttributeListSyntax);
 
             if (attributes == null)
                 return;
 
             var t = type.Identifier.Text;
-            
+
             if (!typeHolder.ContainsKey(t))
                 typeHolder.Add(t, (new List<string>(), new List<string>(), t));
 
             foreach (var a in attributes)
             {
-                    //foreach (var d in documentation.SegmentType)
-                    //    typeHolder[t].segments.Add(d);
+                //foreach (var d in documentation.SegmentType)
+                //    typeHolder[t].segments.Add(d);
 
-                    //typeHolder[t].comments.Add(documentation.Comment);
+                //typeHolder[t].comments.Add(documentation.Comment);
             }
         }
 
