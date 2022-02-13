@@ -24,6 +24,7 @@ namespace RoslynHECS
         public static List<ClassDeclarationSyntax> componentsDeclarations = new List<ClassDeclarationSyntax>(2048);
         public static List<ClassDeclarationSyntax> allComponentsDeclarations = new List<ClassDeclarationSyntax>(2048);
         public static List<ClassDeclarationSyntax> systemsDeclarations = new List<ClassDeclarationSyntax>(2048);
+        public static List<ClassDeclarationSyntax> partialDeclarations = new List<ClassDeclarationSyntax>(2048);
         public static List<StructDeclarationSyntax> globalCommands = new List<StructDeclarationSyntax>(2048);
         public static List<StructDeclarationSyntax> localCommands = new List<StructDeclarationSyntax>(2048);
         public static List<StructDeclarationSyntax> networkCommands = new List<StructDeclarationSyntax>(2048);

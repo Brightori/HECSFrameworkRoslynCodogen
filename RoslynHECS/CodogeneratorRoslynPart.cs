@@ -23,7 +23,7 @@ namespace HECSFramework.Core.Generator
 
         public const string SystemBindSetter = "SystemBindSetter";
         public const string ISystemSetter = "ISystemSetter";
-        public const string SystemBindContainer = "SystemBindContainer";
+        public const string SystemBindContainer = "BindContainerForSys";
 
         public const string IReactGlobalCommand = "IReactGlobalCommand";
         public const string IReactCommand = "IReactCommand";
@@ -38,9 +38,11 @@ namespace HECSFramework.Core.Generator
             var tree = new TreeSyntaxNode();
             var bindSystemFunc = new TreeSyntaxNode();
 
+            tree.Add(new UsingSyntax("System"));
             tree.Add(new UsingSyntax("Systems"));
-            tree.Add(new UsingSyntax("Components"));
             tree.Add(new UsingSyntax("Commands", 1));
+            tree.Add(new UsingSyntax("Components"));
+            tree.Add(new UsingSyntax("System.Reflection"));
             tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
             tree.Add(new LeftScopeSyntax());
             tree.Add(GetContaineresForSystems());
@@ -50,13 +52,30 @@ namespace HECSFramework.Core.Generator
             tree.Add(new RightScopeSyntax(1));
             tree.Add(new RightScopeSyntax());
 
-            bindSystemFunc.Add(new TabSimpleSyntax(2, "partial void SetSystemSetters()"));
+            bindSystemFunc.Add(new TabSimpleSyntax(2, "static partial void SetSystemSetters()"));
             bindSystemFunc.Add(new LeftScopeSyntax(2));
-            bindSystemFunc.Add(GetGlobalBindingsRoslyn());
-            bindSystemFunc.Add(GetLocalBindingsRoslyn());
+            bindSystemFunc.Add(GetSystemsContainersDictionary());
             bindSystemFunc.Add(new RightScopeSyntax(2));
 
             return tree.ToString();
+        }
+
+        private ISyntax GetSystemsContainersDictionary()
+        {
+            var tree = new TreeSyntaxNode();
+            var dicBody = new TreeSyntaxNode();
+
+            tree.Add(new TabSimpleSyntax(3, $"systemsSetters = new System.Collections.Generic.Dictionary<Type, {ISystemSetter}>()"));
+            tree.Add(new LeftScopeSyntax(3));
+            tree.Add(dicBody);
+            tree.Add(new RightScopeSyntax(3, true));
+
+            foreach (var s in Program.systems)
+            {
+                dicBody.Add(new TabSimpleSyntax(4, $"{CParse.LeftScope}typeof({s}), new {s}{SystemBindContainer}(){CParse.RightScope},"));
+            }
+
+            return tree;
         }
 
         /// <summary>
@@ -70,7 +89,7 @@ namespace HECSFramework.Core.Generator
             foreach (var system in Program.systems)
             {
                 //собираем парт системы если они есть
-                var allParts = Program.systemsDeclarations.Where(x => x.Identifier.ValueText == system);
+                var allParts = Program.classes.Where(x => x.Identifier.ValueText == system);
                 tree.Add(GetSystemContainer(system, out var bindContainerBody, out var unbindContainer, out var systemPlace, out var fields));
 
                 //смотрим каждую из частей
@@ -78,40 +97,39 @@ namespace HECSFramework.Core.Generator
                 {
                     var baseList = systemPart.BaseList;
 
-                    if (baseList == null) continue;
-
-                    var root = baseList.DescendantNodes();
-
-                    if (root == null) continue;
-
-                    //смотрим список интерфейсов и предков, если есть дженерики, смотрим что из них нам подходит
-                    foreach (var part in root)
+                    if (baseList != null)
                     {
-                        if (part is GenericNameSyntax genericSyntax)
+                        var root = baseList.DescendantNodes();
+
+                        if (root == null) continue;
+
+                        //смотрим список интерфейсов и предков, если есть дженерики, смотрим что из них нам подходит
+                        foreach (var part in root)
                         {
-                            var argumentName = genericSyntax.TypeArgumentList.Arguments[0];
-
-                            switch (genericSyntax.Identifier.ValueText)
+                            if (part is GenericNameSyntax genericSyntax)
                             {
-                                case IReactCommand:
-                                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.EntityCommandService.AddListener<{argumentName}>(system, {CurrentSystem}.CommandReact);"));
-                                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.EntityCommandService.RemoveListener<{argumentName}>(system);"));
-                                    break;
-                                case IReactGlobalCommand:
-                                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactCommand<{argumentName}>(system, {CurrentSystem}.CommandGlobalReact);"));
-                                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactCommand<{argumentName}>(system);"));
-                                    break;
-                                case IReactComponentLocal:
-                                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.AddListener<{argumentName}>(system, currentSystem.ComponentReact);"));
-                                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.RemoveListener(system);"));
-                                    break;
-                                case IReactComponentGlobal:
-                                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactComponent<{argumentName}>(system, {CurrentSystem}.ComponentReactGlobal);"));
-                                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactComponent(system);"));
-                                    break;
-                            }
+                                var argumentName = genericSyntax.TypeArgumentList.Arguments[0];
 
-                            var arg = genericSyntax.TypeArgumentList.Arguments;
+                                switch (genericSyntax.Identifier.ValueText)
+                                {
+                                    case IReactCommand:
+                                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.EntityCommandService.AddListener<{argumentName}>(system, {CurrentSystem}.CommandReact);"));
+                                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.EntityCommandService.RemoveListener<{argumentName}>(system);"));
+                                        break;
+                                    case IReactGlobalCommand:
+                                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactCommand<{argumentName}>(system, {CurrentSystem}.CommandGlobalReact);"));
+                                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactCommand<{argumentName}>(system);"));
+                                        break;
+                                    case IReactComponentLocal:
+                                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.AddListener<{argumentName}>(system, {CurrentSystem}.ComponentReact);"));
+                                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.RemoveListener(system);"));
+                                        break;
+                                    case IReactComponentGlobal:
+                                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactComponent<{argumentName}>(system, {CurrentSystem}.ComponentReactGlobal);"));
+                                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactComponent(system);"));
+                                        break;
+                                }
+                            }
                         }
                     }
 
@@ -127,11 +145,11 @@ namespace HECSFramework.Core.Generator
                                 {
                                     if (field.Modifiers.Any(x => x.ToString().Contains("private")))
                                     {
-                                        SetPrivateComponentBinder(field, system, fields, bindContainerBody);
+                                        SetPrivateComponentBinder(field, system, fields, bindContainerBody, unbindContainer);
                                     }
                                     else
                                     {
-
+                                        SetPublicComponentBinder(field, system, bindContainerBody, unbindContainer);
                                     }
                                 }
                             }
@@ -147,13 +165,25 @@ namespace HECSFramework.Core.Generator
             return tree;
         }
 
-        private void SetPrivateComponentBinder(FieldDeclarationSyntax fieldDeclaration, string system, ISyntax fields, ISyntax binder)
+        private void SetPrivateComponentBinder(FieldDeclarationSyntax fieldDeclaration, string system, ISyntax fields, ISyntax binder, ISyntax unbinder)
         {
-            var fieldType = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax).ToString();
+            var fieldType = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax && x.ToString() != "Required").ToString();
             var fieldName = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is VariableDeclaratorSyntax).ToString();
 
-            fields.Tree.Add(new TabSimpleSyntax(1, $"private FieldInfo {fieldName}FieldBinding = typeof({system}).GetField({CParse.Quote}{fieldName}{CParse.Quote}, BindingFlags.Instance | BindingFlags.NonPublic);"));
-            binder.Tree.Add(new TabSimpleSyntax(3, ""));
+            var fieldBindName = fieldName + "FieldBinding";
+
+            fields.Tree.Add(new TabSimpleSyntax(2, $"private FieldInfo {fieldBindName} = typeof({system}).GetField({CParse.Quote}{fieldName}{CParse.Quote}, BindingFlags.Instance | BindingFlags.NonPublic);"));
+            binder.Tree.Add(new TabSimpleSyntax(3, $"{fieldBindName}.SetValue({CurrentSystem}, {CurrentSystem}.Owner.GetOrAddComponent<{fieldType}>(HMasks.{fieldType}));"));
+            unbinder.Tree.Add(new TabSimpleSyntax(3, $"{fieldBindName}.SetValue(system, null);"));
+        }
+
+        private void SetPublicComponentBinder(FieldDeclarationSyntax fieldDeclaration, string system, ISyntax binder, ISyntax unbinder)
+        {
+            var fieldType = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax && x.ToString() != "Required").ToString();
+            var fieldName = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is VariableDeclaratorSyntax).ToString();
+
+            binder.Tree.Add(new TabSimpleSyntax(3, $"{CurrentSystem}.{fieldName} = {CurrentSystem}.Owner.GetOrAddComponent<{fieldType}>(HMasks.{fieldType});"));
+            unbinder.Tree.Add(new TabSimpleSyntax(3, $"{CurrentSystem}.{fieldName} = null;"));
         }
 
         /// <summary>
@@ -174,57 +204,20 @@ namespace HECSFramework.Core.Generator
             tree.Add(new LeftScopeSyntax(1));
             tree.Add(currentFields);
             tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(2, "public void BindSystem(ISystem system)"));
+            tree.Add(new TabSimpleSyntax(2, $"public void BindSystem(ISystem system)"));
             tree.Add(new LeftScopeSyntax(2));
             tree.Add(currentSystemPlace);
             tree.Add(bindBody);
             tree.Add(new RightScopeSyntax(2));
             tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(2, "public void UnBindSystem(ISystem system)"));
+            tree.Add(new TabSimpleSyntax(2, $"public void UnBindSystem(ISystem system)"));
             tree.Add(new LeftScopeSyntax(2));
+            tree.Add(currentSystemPlace);
             tree.Add(unbindBody);
             tree.Add(new RightScopeSyntax(2));
             tree.Add(new RightScopeSyntax(1));
 
             systemPlace = currentSystemPlace;
-            return tree;
-        }
-
-        private ISyntax GetGlobalBindingsRoslyn()
-        {
-            var tree = new TreeSyntaxNode();
-
-            for (int i = 0; i < Program.globalCommands.Count; i++)
-            {
-                var t = Program.globalCommands[i];
-
-                if (i != 0)
-                    tree.Add(new ParagraphSyntax());
-
-                var name = t.Identifier.ValueText;
-                tree.Add(new TabSimpleSyntax(3, $"if (system is IReactGlobalCommand<{name}> {name}GlobalCommandsReact)"));
-                tree.Add(new TabSimpleSyntax(4, $"system.Owner.World.AddGlobalReactCommand<{name}>(system, {name}GlobalCommandsReact.CommandGlobalReact);"));
-            }
-
-            return tree;
-        }
-
-        private ISyntax GetLocalBindingsRoslyn()
-        {
-            var tree = new TreeSyntaxNode();
-
-            var localSystemBind = Program.localCommands;
-
-            for (int i = 0; i < localSystemBind.Count; i++)
-            {
-                var t = localSystemBind[i];
-                var name = t.Identifier.ValueText;
-
-                tree.Add(new ParagraphSyntax());
-                tree.Add(new TabSimpleSyntax(3, $"if (system is IReactCommand<{name}> {name}CommandsLocalReact)"));
-                tree.Add(new TabSimpleSyntax(4, $"system.Owner.EntityCommandService.AddListener<{name}>(system, {name}CommandsLocalReact.CommandReact);"));
-            }
-
             return tree;
         }
         #endregion
