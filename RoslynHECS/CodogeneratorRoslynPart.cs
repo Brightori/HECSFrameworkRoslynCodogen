@@ -113,20 +113,20 @@ namespace HECSFramework.Core.Generator
                                 switch (genericSyntax.Identifier.ValueText)
                                 {
                                     case IReactCommand:
-                                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.EntityCommandService.AddListener<{argumentName}>(system, {CurrentSystem}.CommandReact);"));
+                                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.EntityCommandService.AddListener<{argumentName}>(system, {CurrentSystem});"));
                                         unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.EntityCommandService.RemoveListener<{argumentName}>(system);"));
                                         break;
                                     case IReactGlobalCommand:
-                                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactCommand<{argumentName}>(system, {CurrentSystem}.CommandGlobalReact);"));
+                                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactCommand<{argumentName}>(system, {CurrentSystem});"));
                                         unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactCommand<{argumentName}>(system);"));
                                         break;
                                     case IReactComponentLocal:
-                                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.AddListener<{argumentName}>(system, {CurrentSystem}.ComponentReact);"));
-                                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.RemoveListener(system);"));
+                                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.AddListener<{argumentName}>(system, {CurrentSystem});"));
+                                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.RemoveListener<{argumentName}>(system);"));
                                         break;
                                     case IReactComponentGlobal:
-                                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactComponent<{argumentName}>(system, {CurrentSystem}.ComponentReactGlobal);"));
-                                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactComponent(system);"));
+                                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactComponent<{argumentName}>(system, {CurrentSystem});"));
+                                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactComponent<{argumentName}>(system);"));
                                         break;
                                 }
                             }
@@ -517,6 +517,11 @@ namespace HECSFramework.Core.Generator
                 tree.Add(new TabSimpleSyntax(2, "public void RemoveComponent(IEntity entity, IComponent component)"));
                 tree.Add(new LeftScopeSyntax(2));
                 tree.Add(new TabSimpleSyntax(3, $"entity.ComponentContext.Get{component.Identifier.ValueText} = null;"));
+                tree.Add(new RightScopeSyntax(2));
+                tree.Add(new TabSimpleSyntax(2, "public void RegisterComponent(IEntity entity, bool isAdded)"));
+                tree.Add(new LeftScopeSyntax(2));
+                tree.Add(new TabSimpleSyntax(3, $"entity.World.GlobalComponentListenerService.Invoke(entity.Get{component.Identifier.ValueText}(), isAdded);"));
+                tree.Add(new TabSimpleSyntax(3, $"entity.RegisterComponentListenersService.Invoke(entity.Get{component.Identifier.ValueText}(), isAdded);"));
                 tree.Add(new RightScopeSyntax(2));
                 tree.Add(new RightScopeSyntax(1));
 
