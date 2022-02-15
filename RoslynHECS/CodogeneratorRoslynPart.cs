@@ -103,32 +103,22 @@ namespace HECSFramework.Core.Generator
 
                         if (root == null) continue;
 
+                        var interfaces = new List<InterfaceDeclarationSyntax>(8);
+                        GetAllInterfacesReactsRecursive(baseList, interfaces);
+
                         //смотрим список интерфейсов и предков, если есть дженерики, смотрим что из них нам подходит
                         foreach (var part in root)
                         {
-                            if (part is GenericNameSyntax genericSyntax)
-                            {
-                                var argumentName = genericSyntax.TypeArgumentList.Arguments[0];
+                            ProcessReacts(part, bindContainerBody, unbindContainer);
+                        }
 
-                                switch (genericSyntax.Identifier.ValueText)
-                                {
-                                    case IReactCommand:
-                                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.EntityCommandService.AddListener<{argumentName}>(system, {CurrentSystem});"));
-                                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.EntityCommandService.RemoveListener<{argumentName}>(system);"));
-                                        break;
-                                    case IReactGlobalCommand:
-                                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactCommand<{argumentName}>(system, {CurrentSystem});"));
-                                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactCommand<{argumentName}>(system);"));
-                                        break;
-                                    case IReactComponentLocal:
-                                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.AddListener<{argumentName}>(system, {CurrentSystem});"));
-                                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.RemoveListener<{argumentName}>(system);"));
-                                        break;
-                                    case IReactComponentGlobal:
-                                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactComponent<{argumentName}>(system, {CurrentSystem});"));
-                                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactComponent<{argumentName}>(system);"));
-                                        break;
-                                }
+                        foreach (var intrface in interfaces)
+                        {
+                            var interfaceBase = intrface.BaseList.DescendantNodes();
+
+                            foreach (var part in interfaceBase)
+                            {
+                                ProcessReacts(part, bindContainerBody, unbindContainer);
                             }
                         }
                     }
@@ -143,6 +133,10 @@ namespace HECSFramework.Core.Generator
                             {
                                 if (attribute.Parent is FieldDeclarationSyntax field)
                                 {
+                                    var types = field.DescendantNodes().OfType<IdentifierNameSyntax>();
+
+                                    if (types.Any(x => Program.systems.Contains(x.ToString()))) continue;
+
                                     if (field.Modifiers.Any(x => x.ToString().Contains("private")))
                                     {
                                         SetPrivateComponentBinder(field, system, fields, bindContainerBody, unbindContainer);
@@ -165,9 +159,71 @@ namespace HECSFramework.Core.Generator
             return tree;
         }
 
+        private void ProcessReacts(Microsoft.CodeAnalysis.SyntaxNode part, ISyntax bindContainerBody, ISyntax unbindContainer)
+        {
+            if (part is GenericNameSyntax genericSyntax)
+            {
+                var argumentName = genericSyntax.TypeArgumentList.Arguments[0];
+
+                switch (genericSyntax.Identifier.ValueText)
+                {
+                    case IReactCommand:
+                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.EntityCommandService.AddListener<{argumentName}>(system, {CurrentSystem});"));
+                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.EntityCommandService.RemoveListener<{argumentName}>(system);"));
+                        break;
+                    case IReactGlobalCommand:
+                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactCommand<{argumentName}>(system, {CurrentSystem});"));
+                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactCommand<{argumentName}>(system);"));
+                        break;
+                    case IReactComponentLocal:
+                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.AddListener<{argumentName}>(system, {CurrentSystem});"));
+                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.RemoveListener<{argumentName}>(system);"));
+                        break;
+                    case IReactComponentGlobal:
+                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactComponent<{argumentName}>(system, {CurrentSystem});"));
+                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactComponent<{argumentName}>(system);"));
+                        break;
+                }
+            }
+        }
+
+        private void GetAllInterfacesReactsRecursive(BaseListSyntax baseListSyntax, List<InterfaceDeclarationSyntax> baseInterfaces)
+        {
+            if (baseListSyntax == null) return;
+
+            var interfaces = Program.systemInterfaces;
+
+            foreach (var n in baseListSyntax.DescendantNodes())
+            {
+                var baseClasses = Program.classes.Where(x => x.Identifier.ValueText == n.ToString());
+
+                foreach (var baseClass in baseClasses)
+                {
+                    GetAllInterfacesReactsRecursive(baseClass.BaseList, baseInterfaces);
+                }
+
+                var neededInterface = interfaces.Where(x => x.Identifier.ValueText == n.ToString());
+
+                foreach (var i in neededInterface)
+                {
+                    if (baseInterfaces.Any(x => x.Identifier.ValueText == i.Identifier.ValueText)) continue;
+
+                    baseInterfaces.Add(i);
+                    continue;
+                }
+
+                var checkParentInterfaces = Program.interfaces.FirstOrDefault(x => x.Identifier.ValueText.Contains(n.ToString()));
+
+                if (checkParentInterfaces != null)
+                {
+                    GetAllInterfacesReactsRecursive(checkParentInterfaces.BaseList, baseInterfaces);
+                }
+            }
+        }
+
         private void SetPrivateComponentBinder(FieldDeclarationSyntax fieldDeclaration, string system, ISyntax fields, ISyntax binder, ISyntax unbinder)
         {
-            var fieldType = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax && x.ToString() != "Required").ToString();
+            var fieldType = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax && Program.components.Contains(x.ToString())).ToString();
             var fieldName = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is VariableDeclaratorSyntax).ToString();
 
             var fieldBindName = fieldName + "FieldBinding";

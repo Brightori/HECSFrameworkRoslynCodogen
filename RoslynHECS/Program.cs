@@ -28,13 +28,14 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> globalCommands = new List<StructDeclarationSyntax>(2048);
         public static List<StructDeclarationSyntax> localCommands = new List<StructDeclarationSyntax>(2048);
         public static List<StructDeclarationSyntax> networkCommands = new List<StructDeclarationSyntax>(2048);
+        public static List<InterfaceDeclarationSyntax> systemInterfaces = new List<InterfaceDeclarationSyntax>(2048);
 
         public static List<ClassDeclarationSyntax> classes;
         public static List<StructDeclarationSyntax> structs;
         public static List<InterfaceDeclarationSyntax> interfaces;
 
-        public static string ScriptsPath = @"D:\Develop\HECSTestModules\Assets\";
-        public static string HECSGenerated = @"D:\Develop\HECSTestModules\Assets\Scripts\HECSGenerated\";
+        public static string ScriptsPath = @"D:\Develop\CyberMafia\Assets\";
+        public static string HECSGenerated = @"D:\Develop\CyberMafia\Assets\Scripts\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
@@ -105,7 +106,10 @@ namespace RoslynHECS
             }
 
             foreach (var s in structs)
-                ProcessStructs(s);
+                ProcessStructs(s); 
+            
+            foreach (var i in interfaces)
+                ProcessInterfaces(i);
 
             Console.WriteLine("нашли компоненты " + components.Count);
             SaveFiles();
@@ -249,6 +253,22 @@ namespace RoslynHECS
                 .OfType<IAssemblySymbol>()
                 .Select(assemblySymbol => assemblySymbol.GetTypeByMetadataName(typeMetadataName))
                 .Where(t => t != null);
+        }
+
+        private static void ProcessInterfaces(InterfaceDeclarationSyntax interfaceDeclarationSyntax)
+        {
+            var baselist = interfaceDeclarationSyntax.BaseList;
+
+            if (baselist == null) return;
+
+            foreach (var b in baselist.DescendantNodes())
+            {
+                if (b.ToString().Contains("React"))
+                {
+                    systemInterfaces.Add(interfaceDeclarationSyntax);
+                    return;
+                }
+            }
         }
 
         private static void ProcessClasses(ClassDeclarationSyntax c)
