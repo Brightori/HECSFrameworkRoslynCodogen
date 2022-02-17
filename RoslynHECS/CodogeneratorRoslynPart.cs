@@ -1,11 +1,10 @@
-﻿using HECSFramework.Core.Helpers;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using HECSFramework.Core.Helpers;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using RoslynHECS;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
 
 namespace HECSFramework.Core.Generator
 {
@@ -31,6 +30,10 @@ namespace HECSFramework.Core.Generator
         public const string IReactComponentGlobal = "IReactComponentGlobal";
         public const string CurrentSystem = "currentSystem";
 
+
+        private HashSet<LinkedInterfaceNode> interfaceCache = new HashSet<LinkedInterfaceNode>(64);
+        private HashSet<LinkedGenericInterfaceNode> interfaceGenericCache = new HashSet<LinkedGenericInterfaceNode>(64);
+        private HashSet<ClassDeclarationSyntax> systemCasheParentsAndPartial = new HashSet<ClassDeclarationSyntax>(64);
 
         #region SystemsBinding
         public string GetSystemBindsByRoslyn()
@@ -70,9 +73,11 @@ namespace HECSFramework.Core.Generator
             tree.Add(dicBody);
             tree.Add(new RightScopeSyntax(3, true));
 
-            foreach (var s in Program.systems)
+            foreach (var s in Program.systemOverData.Values)
             {
-                dicBody.Add(new TabSimpleSyntax(4, $"{CParse.LeftScope}typeof({s}), new {s}{SystemBindContainer}(){CParse.RightScope},"));
+                if (s.IsAbstract) continue;
+
+                dicBody.Add(new TabSimpleSyntax(4, $"{CParse.LeftScope}typeof({s.Name}), new {s.Name}{SystemBindContainer}(){CParse.RightScope},"));
             }
 
             return tree;
@@ -86,43 +91,26 @@ namespace HECSFramework.Core.Generator
         {
             var tree = new TreeSyntaxNode();
 
-            foreach (var system in Program.systems)
+            foreach (var system in Program.systemOverData)
             {
+                if (system.Value.IsAbstract) continue;
+
                 //собираем парт системы если они есть
-                var allParts = Program.classes.Where(x => x.Identifier.ValueText == system);
-                tree.Add(GetSystemContainer(system, out var bindContainerBody, out var unbindContainer, out var systemPlace, out var fields));
+                tree.Add(GetSystemContainer(system.Value, out var bindContainerBody, out var unbindContainer, out var systemPlace, out var fields));
 
-                //смотрим каждую из частей
-                foreach (var systemPart in allParts)
+                interfaceGenericCache.Clear();
+                systemCasheParentsAndPartial.Clear();
+
+                system.Value.GetGenericInterfaces(interfaceGenericCache);
+                system.Value.GetAllParentsAndParts(systemCasheParentsAndPartial);
+
+                foreach (var interfaceType in interfaceGenericCache)
                 {
-                    var baseList = systemPart.BaseList;
+                    ProcessReacts(interfaceType, bindContainerBody, unbindContainer);
+                }
 
-                    if (baseList != null)
-                    {
-                        var root = baseList.DescendantNodes();
-
-                        if (root == null) continue;
-
-                        var interfaces = new List<InterfaceDeclarationSyntax>(8);
-                        GetAllInterfacesReactsRecursive(baseList, interfaces);
-
-                        //смотрим список интерфейсов и предков, если есть дженерики, смотрим что из них нам подходит
-                        foreach (var part in root)
-                        {
-                            ProcessReacts(part, bindContainerBody, unbindContainer);
-                        }
-
-                        foreach (var intrface in interfaces)
-                        {
-                            var interfaceBase = intrface.BaseList.DescendantNodes();
-
-                            foreach (var part in interfaceBase)
-                            {
-                                ProcessReacts(part, bindContainerBody, unbindContainer);
-                            }
-                        }
-                    }
-
+                foreach (var systemPart in systemCasheParentsAndPartial)
+                {
                     var attributes = systemPart.DescendantNodes().OfType<AttributeListSyntax>();
 
                     if (attributes != null)
@@ -135,15 +123,13 @@ namespace HECSFramework.Core.Generator
                                 {
                                     var types = field.DescendantNodes().OfType<IdentifierNameSyntax>();
 
-                                    if (types.Any(x => Program.systems.Contains(x.ToString()))) continue;
-
-                                    if (field.Modifiers.Any(x => x.ToString().Contains("private")))
+                                    if (field.Modifiers.Any(x => x.ToString().Contains("private") || x.ToString().Contains("protected")))
                                     {
-                                        SetPrivateComponentBinder(field, system, fields, bindContainerBody, unbindContainer);
+                                        SetPrivateComponentBinder(field, systemPart.Identifier.ValueText, fields, bindContainerBody, unbindContainer);
                                     }
                                     else
                                     {
-                                        SetPublicComponentBinder(field, system, bindContainerBody, unbindContainer);
+                                        SetPublicComponentBinder(field, systemPart.Identifier.ValueText, bindContainerBody, unbindContainer);
                                     }
                                 }
                             }
@@ -153,77 +139,45 @@ namespace HECSFramework.Core.Generator
 
                 //если есть что биндить, добавляем каст системы к нужному типу
                 if (bindContainerBody.Tree.Count > 0)
-                    systemPlace.Tree.Add(new TabSimpleSyntax(3, $"var {CurrentSystem} = ({system})system;"));
+                    systemPlace.Tree.Add(new TabSimpleSyntax(3, $"var {CurrentSystem} = ({system.Value.Name})system;"));
             }
 
             return tree;
         }
 
-        private void ProcessReacts(Microsoft.CodeAnalysis.SyntaxNode part, ISyntax bindContainerBody, ISyntax unbindContainer)
-        {
-            if (part is GenericNameSyntax genericSyntax)
-            {
-                var argumentName = genericSyntax.TypeArgumentList.Arguments[0];
 
-                switch (genericSyntax.Identifier.ValueText)
-                {
-                    case IReactCommand:
-                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.EntityCommandService.AddListener<{argumentName}>(system, {CurrentSystem});"));
-                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.EntityCommandService.RemoveListener<{argumentName}>(system);"));
-                        break;
-                    case IReactGlobalCommand:
-                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactCommand<{argumentName}>(system, {CurrentSystem});"));
-                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactCommand<{argumentName}>(system);"));
-                        break;
-                    case IReactComponentLocal:
-                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.AddListener<{argumentName}>(system, {CurrentSystem});"));
-                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.RemoveListener<{argumentName}>(system);"));
-                        break;
-                    case IReactComponentGlobal:
-                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactComponent<{argumentName}>(system, {CurrentSystem});"));
-                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactComponent<{argumentName}>(system);"));
-                        break;
-                }
+        private void ProcessReacts(LinkedGenericInterfaceNode part, ISyntax bindContainerBody, ISyntax unbindContainer)
+        {
+            switch (part.BaseInterface.Name)
+            {
+                case IReactCommand:
+                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.EntityCommandService.AddListener<{part.GenericType}>(system, {CurrentSystem});"));
+                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.EntityCommandService.RemoveListener<{part.GenericType}>(system);"));
+                    break;
+                case IReactGlobalCommand:
+                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactCommand<{part.GenericType}>(system, {CurrentSystem});"));
+                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactCommand<{part.GenericType}>(system);"));
+                    break;
+                case IReactComponentLocal:
+                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.AddListener<{part.GenericType}>(system, {CurrentSystem});"));
+                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.RegisterComponentListenersService.RemoveListener<{part.GenericType}>(system);"));
+                    break;
+                case IReactComponentGlobal:
+                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactComponent<{part.GenericType}>(system, {CurrentSystem});"));
+                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactComponent<{part.GenericType}>(system);"));
+                    break;
             }
         }
 
-        private void GetAllInterfacesReactsRecursive(BaseListSyntax baseListSyntax, List<InterfaceDeclarationSyntax> baseInterfaces)
-        {
-            if (baseListSyntax == null) return;
 
-            var interfaces = Program.systemInterfaces;
-
-            foreach (var n in baseListSyntax.DescendantNodes())
-            {
-                var baseClasses = Program.classes.Where(x => x.Identifier.ValueText == n.ToString());
-
-                foreach (var baseClass in baseClasses)
-                {
-                    GetAllInterfacesReactsRecursive(baseClass.BaseList, baseInterfaces);
-                }
-
-                var neededInterface = interfaces.Where(x => x.Identifier.ValueText == n.ToString());
-
-                foreach (var i in neededInterface)
-                {
-                    if (baseInterfaces.Any(x => x.Identifier.ValueText == i.Identifier.ValueText)) continue;
-
-                    baseInterfaces.Add(i);
-                    continue;
-                }
-
-                var checkParentInterfaces = Program.interfaces.FirstOrDefault(x => x.Identifier.ValueText.Contains(n.ToString()));
-
-                if (checkParentInterfaces != null)
-                {
-                    GetAllInterfacesReactsRecursive(checkParentInterfaces.BaseList, baseInterfaces);
-                }
-            }
-        }
 
         private void SetPrivateComponentBinder(FieldDeclarationSyntax fieldDeclaration, string system, ISyntax fields, ISyntax binder, ISyntax unbinder)
         {
-            var fieldType = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax && Program.components.Contains(x.ToString())).ToString();
+            var findComponent = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax && Program.components.Contains(x.ToString()));
+
+            if (findComponent == null) return;
+
+            var fieldType = findComponent.ToString();
             var fieldName = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is VariableDeclaratorSyntax).ToString();
 
             var fieldBindName = fieldName + "FieldBinding";
@@ -245,7 +199,7 @@ namespace HECSFramework.Core.Generator
         /// <summary>
         /// тут мы получаем контейнер для конкретной системы
         /// </summary>
-        private ISyntax GetSystemContainer(string systemName, out ISyntax bind, out ISyntax unbind, out ISyntax systemPlace, out ISyntax fields)
+        private ISyntax GetSystemContainer(LinkedNode linkedNode, out ISyntax bind, out ISyntax unbind, out ISyntax systemPlace, out ISyntax fields)
         {
             var tree = new TreeSyntaxNode();
             var bindBody = new TreeSyntaxNode();
@@ -256,7 +210,7 @@ namespace HECSFramework.Core.Generator
             fields = currentFields;
             bind = bindBody;
             unbind = unbindBody;
-            tree.Add(new TabSimpleSyntax(1, $"public sealed class {systemName}{SystemBindContainer} : {ISystemSetter}"));
+            tree.Add(new TabSimpleSyntax(1, $"public sealed class {linkedNode.Name}{SystemBindContainer} : {ISystemSetter}"));
             tree.Add(new LeftScopeSyntax(1));
             tree.Add(currentFields);
             tree.Add(new ParagraphSyntax());
@@ -405,16 +359,21 @@ namespace HECSFramework.Core.Generator
         private ISyntax GetSystemsByHashCodeRoslyn()
         {
             var tree = new TreeSyntaxNode();
+            int i = 0;
 
-            for (int i = 0; i < Program.systemsDeclarations.Count; i++)
+            foreach (var s in Program.systemOverData.Values)
             {
+                if (s.IsAbstract) continue;
+
                 if (i > 0)
                     tree.Add(new ParagraphSyntax());
 
-                var system = Program.systemsDeclarations[i];
+                i++;
 
-                tree.Add(new TabSimpleSyntax(4, $"case {IndexGenerator.GetIndexForType(system.Identifier.ValueText)}:"));
-                tree.Add(new TabSimpleSyntax(5, $"return new {system.Identifier.ValueText}();"));
+                var system = s.Name;
+
+                tree.Add(new TabSimpleSyntax(4, $"case {IndexGenerator.GetIndexForType(system)}:"));
+                tree.Add(new TabSimpleSyntax(5, $"return new {system}();"));
             }
 
             return tree;
@@ -1999,9 +1958,11 @@ namespace HECSFramework.Core.Generator
             tree.Add(dictionaryBody);
             tree.Add(new RightScopeSyntax(2, true));
 
-            foreach (var s in Program.systemsDeclarations)
+            foreach (var s in Program.systemOverData)
             {
-                var name = s.Identifier.ValueText;
+                if (s.Value.IsAbstract) continue;
+
+                var name = s.Key;
                 dictionaryBody.Add(new TabSimpleSyntax(3, $" {CParse.LeftScope} typeof({name}), typeof({name}{BluePrint}) {CParse.RightScope},"));
             }
 
@@ -2014,10 +1975,12 @@ namespace HECSFramework.Core.Generator
         {
             var list = new List<(string name, string classBody)>();
 
-            foreach (var c in Program.systemsDeclarations)
+            foreach (var c in Program.systemOverData.Values)
             {
-                var name = c.Identifier.ValueText;
-                list.Add((name + BluePrint + ".cs", GetSystemBluePrint(c)));
+                if (c.IsAbstract) continue;
+
+                var name = c.Name;
+                list.Add((name + BluePrint + ".cs", GetSystemBluePrint(c.ClassDeclaration)));
             }
 
 
