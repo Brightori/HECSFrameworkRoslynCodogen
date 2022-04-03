@@ -1,4 +1,9 @@
-﻿using HECSFramework.Core;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using HECSFramework.Core;
 using HECSFramework.Core.Generator;
 using HECSFramework.Core.Helpers;
 using Microsoft.Build.Locator;
@@ -6,14 +11,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
-using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Xml.Linq;
 using ClassDeclarationSyntax = Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax;
 using SyntaxNode = Microsoft.CodeAnalysis.SyntaxNode;
 
@@ -38,8 +35,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> structs;
         public static List<InterfaceDeclarationSyntax> interfaces;
 
-        public static string ScriptsPath = @"D:\Develop\MinilifeRTS\Assets\";
-        public static string HECSGenerated = @"D:\Develop\MinilifeRTS\Assets\Scripts\HECSGenerated\";
+        public static string ScriptsPath = @"D:\Develop\DarkLord\Assets\";
+        public static string HECSGenerated = @"D:\Develop\DarkLord\Assets\Scripts\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
@@ -57,9 +54,9 @@ namespace RoslynHECS
 
         private const string BaseComponent = "BaseComponent";
 
-        private static bool resolversNeeded = true;
+        private static bool resolversNeeded = false;
         private static bool bluePrintsNeeded = true;
-        private static bool commandMapneeded = true;
+        private static bool commandMapneeded = false;
 
         private static HashSet<LinkedInterfaceNode> interfaceCache = new HashSet<LinkedInterfaceNode>(32);
 
@@ -414,10 +411,15 @@ namespace RoslynHECS
             if (baseClass.Count == 0)
                 return false;
 
+            //todo костыль, надо компоненты искать не снизу вверх, а сверху вниз, и выстроить их в ноды 
+            if (baseClass.Any(x => x.ToString().Contains("AnimatorParameter")))
+                return false;
+
             if (baseClass.Any(x => x.ToString().Contains(BaseComponent)))
                 return true;
 
             var gatherParents = classes.Where(x => baseClass.Any(z => z.ToString() == x.Identifier.ValueText));
+
 
             foreach (var parent in gatherParents)
             {
