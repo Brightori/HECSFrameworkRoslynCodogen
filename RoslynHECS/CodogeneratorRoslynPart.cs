@@ -169,8 +169,6 @@ namespace HECSFramework.Core.Generator
             }
         }
 
-
-
         private void SetPrivateComponentBinder(FieldDeclarationSyntax fieldDeclaration, string system, ISyntax fields, ISyntax binder, ISyntax unbinder)
         {
             var findComponent = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax && Program.components.Contains(x.ToString()));
@@ -1076,7 +1074,7 @@ namespace HECSFramework.Core.Generator
                     {
                         foreach (var a in attributeList.Attributes)
                         {
-                            if (a.Name.ToString() == "CustomResolver")
+                            if (a.Name.ToString() == "HECSDefaultResolver")
                             {
                                 containersSolve.Add(c);
                                 needContinue = true;
@@ -1190,6 +1188,7 @@ namespace HECSFramework.Core.Generator
                                 Order = validate.Order,
                                 Type = field.Declaration.Type.ToString(),
                                 FieldName = field.Declaration.Variables[0].Identifier.ToString(),
+                                ResolverName = validate.resolver,
                                 Node = field
                             });
                         }
@@ -1245,7 +1244,11 @@ namespace HECSFramework.Core.Generator
             {
 
                 fields.Add(new TabSimpleSyntax(2, $"[Key({f.Order})]"));
-                fields.Add(new TabSimpleSyntax(2, $"public {f.Type} {f.FieldName};"));
+
+                if (string.IsNullOrEmpty(f.ResolverName))
+                    fields.Add(new TabSimpleSyntax(2, $"public {f.Type} {f.FieldName};"));
+                else
+                    fields.Add(new TabSimpleSyntax(2, $"public {f.ResolverName} {f.FieldName};"));
 
                 fieldsForConstructor.Add((f.Type, f.FieldName));
 
@@ -1256,8 +1259,17 @@ namespace HECSFramework.Core.Generator
                 }
                 else
                 {
-                    constructor.Add(new TabSimpleSyntax(3, $"this.{f.FieldName} = {c.Identifier.ValueText.ToLower()}.{f.FieldName};"));
-                    outFunc.Add(new TabSimpleSyntax(3, $"{c.Identifier.ValueText.ToLower()}.{f.FieldName} = this.{f.FieldName};"));
+                    if (string.IsNullOrEmpty(f.ResolverName))
+                    {
+                        constructor.Add(new TabSimpleSyntax(3, $"this.{f.FieldName} = {c.Identifier.ValueText.ToLower()}.{f.FieldName};"));
+                        outFunc.Add(new TabSimpleSyntax(3, $"{c.Identifier.ValueText.ToLower()}.{f.FieldName} = this.{f.FieldName};"));
+                    }
+                    else
+                    {
+                        AddUniqueSyntax(usings, new UsingSyntax("HECSFramework.Serialize"));
+                        constructor.Add(new TabSimpleSyntax(3, $"this.{f.FieldName} = new {f.ResolverName}().In(ref {c.Identifier.ValueText.ToLower()}.{f.FieldName});"));
+                        outFunc.Add(new TabSimpleSyntax(3, $"this.{f.FieldName}.Out(ref {c.Identifier.ValueText.ToLower()}.{f.FieldName});"));
+                    }
                 }
             }
 
@@ -1273,7 +1285,7 @@ namespace HECSFramework.Core.Generator
             return tree;
         }
 
-        public (bool valid, int Order) IsValidField(FieldDeclarationSyntax fieldDeclarationSyntax)
+        public (bool valid, int Order, string resolver) IsValidField(FieldDeclarationSyntax fieldDeclarationSyntax)
         {
             foreach (var a in fieldDeclarationSyntax.AttributeLists.SelectMany(x => x.Attributes).ToArray())
             {
@@ -1281,13 +1293,25 @@ namespace HECSFramework.Core.Generator
                 {
                     if (a.ArgumentList == null)
                         continue;
+                    var resolver = string.Empty;
 
-                    var intValue = int.Parse(a.ArgumentList.Arguments.ToArray()[0].ToString());
-                    return (true, intValue);
+                    var arguments = a.ArgumentList.Arguments.ToArray();
+                    var intValue = int.Parse(arguments[0].ToString());
+
+                    if (arguments.Length > 1)
+                    {
+                        var data = arguments[1].ToString();
+                        data = data.Replace("typeof(", "");
+                        data = data.Replace(")", "");
+                        resolver = data;
+                    }
+                        
+
+                    return (true, intValue, resolver);
                 }
             }
 
-            return (false, -1);
+            return (false, -1, string.Empty);
         }
 
         public (bool isValid, string nameSpace) GetNameSpaceForCollection(PropertyDeclarationSyntax propertyDeclaration)
@@ -1639,6 +1663,7 @@ namespace HECSFramework.Core.Generator
             public string FieldName;
             public int Order;
             public CSharpSyntaxNode Node;
+            public string ResolverName;
 
             public override bool Equals(object obj)
             {
@@ -1721,6 +1746,7 @@ namespace HECSFramework.Core.Generator
 
             tree.Add(new UsingSyntax("Components"));
             tree.Add(new UsingSyntax("HECSFramework.Core"));
+            tree.Add(new UsingSyntax("MessagePack.Resolvers"));
             tree.Add(new UsingSyntax("MessagePack", 1));
             tree.Add(GetUnionResolvers());
             tree.Add(new ParagraphSyntax());
@@ -1728,6 +1754,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(new LeftScopeSyntax());
             tree.Add(new TabSimpleSyntax(1, "public partial class ResolversMap"));
             tree.Add(new LeftScopeSyntax(1));
+            tree.Add(GetResolverMapStaticConstructor());
             tree.Add(ResolverMapConstructor());
             tree.Add(LoadDataFromContainerSwitch());
             tree.Add(GetContainerForComponentFuncProvider());
@@ -1737,6 +1764,24 @@ namespace HECSFramework.Core.Generator
             tree.Add(new RightScopeSyntax(1));
             tree.Add(new RightScopeSyntax());
             return tree.ToString();
+        }
+
+        private ISyntax GetResolverMapStaticConstructor()
+        {
+            var tree = new TreeSyntaxNode();
+
+            tree.Add(new TabSimpleSyntax(2, "private static bool isMessagePackInited;"));
+            tree.Add(new TabSimpleSyntax(3, "static ResolversMap()"));
+            tree.Add(new LeftScopeSyntax(3));
+            tree.Add(new TabSimpleSyntax(4, "if (isMessagePackInited)"));
+            tree.Add(new TabSimpleSyntax(5, "return;"));
+            tree.Add(new TabSimpleSyntax(4, "StaticCompositeResolver.Instance.Register(StandardResolver.Instance, GeneratedResolver.Instance);"));
+            tree.Add(new TabSimpleSyntax(4, "isMessagePackInited = true;"));
+            tree.Add(new TabSimpleSyntax(4, "MessagePackSerializer.DefaultOptions = MessagePackSerializerOptions.Standard.WithResolver(StaticCompositeResolver.Instance);"));
+            tree.Add(new RightScopeSyntax());
+            tree.Add(new ParagraphSyntax());
+
+            return tree;
         }
 
         private ISyntax GetUnionResolvers()
