@@ -417,7 +417,8 @@ namespace HECSFramework.Core.Generator
 
             for (int i = 0; i < Program.componentsDeclarations.Count; i++)
             {
-                dicBody.Add(new TabSimpleSyntax(4, $"{{ typeof({Program.componentsDeclarations[i].Identifier.ValueText}), {i + 1} }},"));
+                var name = Program.componentsDeclarations[i].Identifier.ValueText;
+                dicBody.Add(new TabSimpleSyntax(4, $"{{ typeof({name}), {i + 1} }},"));
             }
 
             return tree;
@@ -714,8 +715,6 @@ namespace HECSFramework.Core.Generator
             foreach (var c in Program.componentsDeclarations)
             {
                 var name = c.Identifier.ValueText;
-
-                var componentsTest = Program.componentsDeclarations.Select(x => x.Identifier.Value).OrderBy(x => x).ToList();
 
                 properties.Add(new CompositeSyntax(new TabSpaceSyntax(2),
                     new SimpleSyntax($"public {name} Get{name};"), new ParagraphSyntax()));

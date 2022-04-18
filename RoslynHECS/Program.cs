@@ -28,6 +28,7 @@ namespace RoslynHECS
 
         public static Dictionary<string, InterfaceDeclarationSyntax> allInterfacesByName = new Dictionary<string, InterfaceDeclarationSyntax>(1024);
         public static Dictionary<string, LinkedNode> systemOverData = new Dictionary<string, LinkedNode>(512);
+        public static Dictionary<string, LinkedNode> componentOverData = new Dictionary<string, LinkedNode>(512);
         public static Dictionary<string, LinkedInterfaceNode> interfacesOverData = new Dictionary<string, LinkedInterfaceNode>(512);
         public static Dictionary<string, LinkedGenericInterfaceNode> genericInterfacesOverData = new Dictionary<string, LinkedGenericInterfaceNode>(512);
 
@@ -35,8 +36,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> structs;
         public static List<InterfaceDeclarationSyntax> interfaces;
 
-        public static string ScriptsPath = @"D:\Develop\VodooTechnicalDemo\Assets\";
-        public static string HECSGenerated = @"D:\Develop\VodooTechnicalDemo\Assets\Scripts\HECSGenerated\";
+        public static string ScriptsPath = @"D:\Develop\ZombieDefTechTest\Assets\";
+        public static string HECSGenerated = @"D:\Develop\ZombieDefTechTest\Assets\Scripts\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
@@ -129,12 +130,9 @@ namespace RoslynHECS
 
             ProcessInterfaces();
             GatherSystems();
+            GatherComponents();
 
-            foreach (var c in classes)
-            {
-                //Console.WriteLine(c.Identifier.ValueText);
-                ProcessClasses(c);
-            }
+            ProcessClasses();
 
             foreach (var s in structs)
                 ProcessStructs(s);
@@ -310,7 +308,7 @@ namespace RoslynHECS
                 {
                     foreach (var t in baseTypes.DescendantNodes())
                     {
-                        if (interfacesOverData.TryGetValue(t.ToString(), out var interfaceLinked)) 
+                        if (interfacesOverData.TryGetValue(t.ToString(), out var interfaceLinked))
                         {
                             interfaceCache.Clear();
                             interfaceLinked.GetInterfaces(interfaceCache);
@@ -376,31 +374,13 @@ namespace RoslynHECS
             }
         }
 
-        private static void ProcessClasses(ClassDeclarationSyntax c)
+        private static void ProcessClasses()
         {
-            var classCurrent = c.Identifier.ValueText;
-
-            //todo это костыль для избегания рекурсий из за дженериков в которые передаётся аргументом тип реализатора
-            //можно попробать добавить счётчик или запилить проверку чтобы прервать бесконечную рекурсию
-            if (c.ConstraintClauses != null && c.ConstraintClauses.Count > 0)
-                return;
-
-            var baseClass = c.BaseList != null ? c.BaseList.ChildNodes()?.ToArray() : new SyntaxNode[0];
-            var isAbstract = c.Modifiers.Any(x => x.IsKind(SyntaxKind.AbstractKeyword));
-
-            if (IsComponent(c))
+            foreach (var comp in componentOverData.Values)
             {
-                allComponentsDeclarations.Add(c); //сюда мы добавляем всё подряд, так как у нас могут быть партиал классы которые повторяются
+                if (comp.IsAbstract) continue;
 
-                if (isAbstract)
-                    return;
-
-                if (components.Contains(classCurrent))
-                    return;
-
-                components.Add(classCurrent);
-                componentsDeclarations.Add(c);
-                Console.WriteLine("нашли компонент " + classCurrent);
+                componentsDeclarations.Add(comp.ClassDeclaration);
             }
         }
 
@@ -429,6 +409,77 @@ namespace RoslynHECS
 
             return false;
         }
+
+        private static void GatherComponents()
+        {
+            var pureComponents = classes.Where(x => x.Identifier.ValueText != "BaseComponent" && x.BaseList != null && x.BaseList.Types.Any(z => z.ToString() == "BaseComponent" || z.ToString() == "IComponent"));
+
+            foreach (var component in pureComponents)
+            {
+                var name = component.Identifier.ValueText;
+
+                if (componentOverData.ContainsKey(name))
+                {
+                    continue;
+                }
+
+                componentOverData.Add(component.Identifier.ValueText, new LinkedNode
+                {
+                    Name = name,
+                    ClassDeclaration = component,
+                    Parent = null,
+                    IsAbstract = component.Modifiers.Any(x => x.ValueText == "abstract"),
+                    IsPartial = component.Modifiers.Any(x => x.ValueText == "partial"),
+                    IsGeneric = component.TypeParameterList != null,
+                    Parts = new HashSet<ClassDeclarationSyntax>(),
+                    Interfaces = new HashSet<LinkedInterfaceNode>(),
+                });
+
+                if (componentOverData[name].IsPartial)
+                {
+                    var parts = classes.Where(x => x.Identifier.ValueText == name);
+
+                    foreach (var part in parts)
+                    {
+                        componentOverData[name].Parts.Add(part);
+
+                        var baseList = part.BaseList;
+
+                        if (baseList != null)
+                        {
+                            foreach (var tp in baseList.Types)
+                            {
+                                if (interfacesOverData.TryGetValue(tp.ToString(), out var node))
+                                {
+                                    componentOverData[name].Interfaces.Add(node);
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    var baseList = component.BaseList?.Types;
+
+                    if (baseList != null)
+                    {
+                        foreach (var tp in baseList)
+                        {
+                            if (interfacesOverData.TryGetValue(tp.ToString(), out var node))
+                            {
+                                componentOverData[name].Interfaces.Add(node);
+                            }
+                        }
+                    }
+                }
+            }
+
+            foreach (var ln in componentOverData.Values.ToArray())
+            {
+                ProcessLinkNodesComponents(ln);
+            }
+        }
+
 
         private static void GatherSystems()
         {
@@ -496,6 +547,75 @@ namespace RoslynHECS
             foreach (var ln in systemOverData.Values.ToArray())
             {
                 ProcessLinkNodes(ln);
+            }
+        }
+
+        private static void ProcessLinkNodesComponents(LinkedNode linkedNode)
+        {
+            IEnumerable<ClassDeclarationSyntax> children = null; 
+
+            if (linkedNode.IsGeneric)
+            {
+                children = classes.Where(x => x.BaseList != null && x.BaseList.Types.Any(z => z.Type is GenericNameSyntax nameSyntax && nameSyntax.Identifier.ValueText == linkedNode.Name));
+            }
+            else
+                children = classes.Where(x => x.BaseList != null && x.BaseList.Types.Any(z => z.ToString() == linkedNode.Name));
+
+            var neede = classes.FirstOrDefault(x => x.Identifier.ValueText == "BaseDefence");
+
+            foreach (var component in children)
+            {
+                var name = component.Identifier.ValueText;
+                if (componentOverData.ContainsKey(name))
+                {
+                    continue;
+                }
+
+                componentOverData.Add(component.Identifier.ValueText, new LinkedNode
+                {
+                    Name = name,
+                    ClassDeclaration = component,
+                    Parent = null,
+                    IsAbstract = component.Modifiers.Any(x => x.ValueText == "abstract"),
+                    IsPartial = component.Modifiers.Any(x => x.ValueText == "partial"),
+                    IsGeneric = component.TypeParameterList != null,
+                    Parts = new HashSet<ClassDeclarationSyntax>(8),
+                    Interfaces = new HashSet<LinkedInterfaceNode>(8),
+                });
+
+                if (componentOverData[name].IsPartial)
+                {
+                    var parts = classes.Where(x => x.Identifier.ValueText == name);
+
+                    foreach (var part in parts)
+                    {
+                        if (part == component) continue;
+                        componentOverData[name].Parts.Add(part);
+
+                        if (interfacesOverData.TryGetValue(part.ToString(), out var node))
+                        {
+                            componentOverData[name].Interfaces.Add(node);
+                        }
+                    }
+                }
+                else
+                {
+                    var baseList = component.BaseList?.Types;
+
+                    if (baseList != null)
+                    {
+                        foreach (var tp in baseList)
+                        {
+                            if (interfacesOverData.TryGetValue(tp.ToString(), out var node))
+                            {
+                                componentOverData[name].Interfaces.Add(node);
+                            }
+                        }
+                    }
+                }
+
+                componentOverData[name].Parent = linkedNode;
+                ProcessLinkNodesComponents(componentOverData[name]);
             }
         }
 
@@ -662,6 +782,7 @@ namespace RoslynHECS
         public LinkedNode Parent;
         public bool IsAbstract;
         public bool IsPartial;
+        public bool IsGeneric;
         public HashSet<ClassDeclarationSyntax> Parts;
         public HashSet<LinkedInterfaceNode> Interfaces;
 
@@ -707,7 +828,7 @@ namespace RoslynHECS
                             interfaces.Add(node);
                         }
 
-                        foreach (var  i in Interfaces)
+                        foreach (var i in Interfaces)
                         {
                             i.GetGenericInterfaces(interfaces);
                         }
