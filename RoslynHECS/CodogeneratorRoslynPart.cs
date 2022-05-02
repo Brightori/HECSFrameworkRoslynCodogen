@@ -171,7 +171,7 @@ namespace HECSFramework.Core.Generator
 
         private void SetPrivateComponentBinder(FieldDeclarationSyntax fieldDeclaration, string system, ISyntax fields, ISyntax binder, ISyntax unbinder)
         {
-            var findComponent = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax && Program.components.Contains(x.ToString()));
+            var findComponent = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax && Program.componentOverData.ContainsKey(x.ToString()));
 
             if (findComponent == null) return;
 
