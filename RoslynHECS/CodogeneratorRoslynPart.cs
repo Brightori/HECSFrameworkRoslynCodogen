@@ -1753,7 +1753,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(new LeftScopeSyntax());
             tree.Add(new TabSimpleSyntax(1, "public partial class ResolversMap"));
             tree.Add(new LeftScopeSyntax(1));
-            tree.Add(GetResolverMapStaticConstructor());
+            //tree.Add(GetResolverMapStaticConstructor()); we move this to client when mpc codogen
             tree.Add(ResolverMapConstructor());
             tree.Add(LoadDataFromContainerSwitch());
             tree.Add(GetContainerForComponentFuncProvider());
