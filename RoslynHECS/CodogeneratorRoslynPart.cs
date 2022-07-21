@@ -25,6 +25,7 @@ namespace HECSFramework.Core.Generator
         public const string SystemBindContainer = "BindContainerForSys";
 
         public const string IReactGlobalCommand = "IReactGlobalCommand";
+        public const string INetworkComponent = "INetworkComponent";
         public const string IReactCommand = "IReactCommand";
         public const string IReactComponentLocal = "IReactComponentLocal";
         public const string IReactComponentGlobal = "IReactComponentGlobal";
@@ -2087,8 +2088,12 @@ namespace HECSFramework.Core.Generator
 
         #region CommandsResolvers
 
-
-        public string GenerateNetworkCommandsMap(List<StructDeclarationSyntax> commands)
+        /// <summary>
+        /// we generate here commands map and short ids staff
+        /// </summary>
+        /// <param name="commands"></param>
+        /// <returns></returns>
+        public string GenerateNetworkCommandsAndShortIdsMap(List<StructDeclarationSyntax> commands)
         {
             var tree = new TreeSyntaxNode();
             var resolvers = new TreeSyntaxNode();
@@ -2109,6 +2114,8 @@ namespace HECSFramework.Core.Generator
             tree.Add(new RightScopeSyntax(2, true));
             tree.Add(new ParagraphSyntax());
             tree.Add(typeToIdDictionary);
+            tree.Add(new ParagraphSyntax());
+            tree.Add(GetShortIdPart());
             tree.Add(new ParagraphSyntax());
             tree.Add(InitPartialCommandResolvers());
             tree.Add(new RightScopeSyntax(1));
@@ -2132,6 +2139,22 @@ namespace HECSFramework.Core.Generator
             }
 
             return tree.ToString();
+        }
+
+        public ISyntax GetShortIdPart()
+        {
+            var tree = new TreeSyntaxNode();
+
+            foreach (var c in Program.componentOverData.Values)
+            {
+                foreach (var i in c.Interfaces)
+                {
+                    if (i.Name == INetworkComponent)
+                        HECSDebug.Log("нашли нетворк компонент " + c.Name);
+                }
+            }
+
+            return tree;
         }
 
         private ISyntax GetCommandMethod(StructDeclarationSyntax command)

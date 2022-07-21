@@ -36,8 +36,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> structs;
         public static List<InterfaceDeclarationSyntax> interfaces;
 
-        public static string ScriptsPath = @"D:\UniverseServerCorp\UniverseServer\";
-        public static string HECSGenerated = @"D:\UniverseServerCorp\UniverseServer\HECSGenerated\";
+        public static string ScriptsPath = @"D:\UniverseClientCorp\Assets\";
+        public static string HECSGenerated = @"D:\UniverseClientCorp\Assets\Scripts\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
@@ -57,7 +57,7 @@ namespace RoslynHECS
 
         private static bool resolversNeeded = true;
         private static bool bluePrintsNeeded = true;
-        private static bool commandMapneeded = false;
+        private static bool commandMapneeded = true;
 
         private static HashSet<LinkedInterfaceNode> interfaceCache = new HashSet<LinkedInterfaceNode>(32);
 
@@ -192,7 +192,7 @@ namespace RoslynHECS
 
             if (commandMapneeded)
             {
-                var commandMap = processGeneration.GenerateNetworkCommandsMap(networkCommands);
+                var commandMap = processGeneration.GenerateNetworkCommandsAndShortIdsMap(networkCommands);
                 SaveToFile("CommandsMap.cs", commandMap, HECSGenerated);
             }
 
@@ -265,7 +265,7 @@ namespace RoslynHECS
                 Console.WriteLine("нашли локальную команду " + structCurrent);
             }
 
-            if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains("INetworkCommand")))
+            if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains("INetworkCommand") || x.ToString().Contains("INetworkLocalCommand")))
             {
                 globalCommands.AddOrRemoveElement(s, true);
                 localCommands.AddOrRemoveElement(s, true);
