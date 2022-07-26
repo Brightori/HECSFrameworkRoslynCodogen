@@ -1121,12 +1121,13 @@ namespace HECSFramework.Core.Generator
             usings.Add(new UsingSyntax("Components"));
             usings.Add(new UsingSyntax("System"));
             usings.Add(new UsingSyntax("MessagePack"));
+            usings.Add(new UsingSyntax("HECSFramework.Serialize"));
             usings.Add(new UsingSyntax("Commands"));
 
             tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
             tree.Add(new LeftScopeSyntax());
             tree.Add(new TabSimpleSyntax(1, "[MessagePackObject, Serializable]"));
-            tree.Add(new TabSimpleSyntax(1, $"public struct {name + Resolver} : IResolver<{name}>, IData"));
+            tree.Add(new TabSimpleSyntax(1, $"public struct {name + Resolver} : IResolver<{name}>, IResolver<{name + Resolver},{name}>, IData"));
             tree.Add(new LeftScopeSyntax(1));
             tree.Add(fields);
             tree.Add(new ParagraphSyntax());
