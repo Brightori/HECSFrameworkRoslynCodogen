@@ -5,6 +5,8 @@ using HECSFramework.Core.Helpers;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using RoslynHECS;
+using RoslynHECS.DataTypes;
+using RoslynHECS.Helpers;
 
 namespace HECSFramework.Core.Generator
 {
@@ -458,7 +460,7 @@ namespace HECSFramework.Core.Generator
             composite.Add(new TabSpaceSyntax(3));
             composite.Add(new SimpleSyntax(CParse.LeftScope));
             composite.Add(new CompositeSyntax(new SimpleSyntax(CParse.Space + IndexGenerator.GetIndexForType(c.Identifier.ValueText).ToString() + CParse.Comma)));
-            composite.Add(new SimpleSyntax($" new ComponentMaskAndIndex {{ComponentName = {CParse.Quote}{ c.Identifier.ValueText }{(CParse.Quote)}, ComponentsMask = new {typeof(HECSMask).Name}"));
+            composite.Add(new SimpleSyntax($" new ComponentMaskAndIndex {{ComponentName = {CParse.Quote}{c.Identifier.ValueText}{(CParse.Quote)}, ComponentsMask = new {typeof(HECSMask).Name}"));
             composite.Add(new ParagraphSyntax());
             composite.Add(MaskPart);
             composite.Add(new CompositeSyntax(new TabSpaceSyntax(3), new SimpleSyntax("}},")));
@@ -1306,7 +1308,7 @@ namespace HECSFramework.Core.Generator
                         data = data.Replace(")", "");
                         resolver = data;
                     }
-                        
+
 
                     return (true, intValue, resolver);
                 }
@@ -2102,6 +2104,7 @@ namespace HECSFramework.Core.Generator
             var genericMethod = new TreeSyntaxNode();
 
             tree.Add(new UsingSyntax("Commands"));
+            tree.Add(new UsingSyntax("Components"));
             tree.Add(new UsingSyntax("System"));
             tree.Add(new UsingSyntax("System.Collections.Generic", 1));
             tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
@@ -2141,18 +2144,90 @@ namespace HECSFramework.Core.Generator
             return tree.ToString();
         }
 
+
+        /// <summary>
+        /// here we codogen all around shortIDs
+        /// </summary>
+        /// <returns></returns>
         public ISyntax GetShortIdPart()
         {
             var tree = new TreeSyntaxNode();
+            HashSet<ShortIDObject> shortIDs = new HashSet<ShortIDObject>(512);
+            ushort count = 1;
 
+            //gather network components
             foreach (var c in Program.componentOverData.Values)
             {
                 foreach (var i in c.Interfaces)
                 {
                     if (i.Name == INetworkComponent)
-                        HECSDebug.Log("нашли нетворк компонент " + c.Name);
+                    {
+                        shortIDs.Add(new ShortIDObject
+                        {
+                            Type = c.Name,
+                            TypeCode = IndexGenerator.GenerateIndex(c.Name),
+                            DataType = 2,
+                        });
+                    }
                 }
             }
+
+            foreach (var c in Program.networkCommands)
+            {
+                var shortIDdata = new ShortIDObject();
+
+                shortIDdata.Type = c.Identifier.ValueText;
+                shortIDdata.TypeCode = IndexGenerator.GenerateIndex(c.Identifier.ValueText);
+
+                if (c.BaseList.ChildNodes().Any(x => x.ToString().Contains("INetworkCommand")))
+                {
+                    shortIDdata.DataType = 0;
+                }
+                else
+                {
+                    shortIDdata.DataType = 1;
+                }
+
+                shortIDs.Add(shortIDdata);
+            }
+
+            shortIDs = shortIDs.OrderBy(x => x.Type).ToHashSet();
+
+            foreach (var i in shortIDs)
+            {
+                i.ShortId = count;
+                count++;
+            }
+
+            tree.Add(GetDictionaryHelper.GetDictionaryMethod("GetTypeToShort", nameof(Type), "ushort", 2, out var typeToshortBody));
+            tree.Add(GetDictionaryHelper.GetDictionaryMethod("GetShortToTypeCode", "ushort", "int", 2, out var shortToTypeCodeBody));
+            tree.Add(GetDictionaryHelper.GetDictionaryMethod("GetShortToDataType", "ushort", "byte", 2, out var getShortToDataType));
+            tree.Add(GetDictionaryHelper.GetDictionaryMethod("GetTypeCodeToShort", "int", "ushort", 2, out var typeCodeToShort));
+
+            foreach (var i in shortIDs)
+            {
+                typeToshortBody.Tree.Add(GetDictionaryHelper.DictionaryBodyRecord(4, $"typeof({i.Type})", i.ShortId.ToString()));
+                shortToTypeCodeBody.Tree.Add(GetDictionaryHelper.DictionaryBodyRecord(4, i.ShortId.ToString(), i.TypeCode.ToString()));
+                getShortToDataType.Tree.Add(GetDictionaryHelper.DictionaryBodyRecord(4, i.ShortId.ToString(), i.DataType.ToString()));
+                typeCodeToShort.Tree.Add(GetDictionaryHelper.DictionaryBodyRecord(4, i.TypeCode.ToString(), i.ShortId.ToString()));
+            }
+
+            tree.Add(InitShortIDPart());
+
+            return tree;
+        }
+
+        private ISyntax InitShortIDPart()
+        {
+            var tree = new TreeSyntaxNode();
+
+            tree.Add(new TabSimpleSyntax(2, "private void InitShortIds()"));
+            tree.Add(new LeftScopeSyntax(2));
+            tree.Add(new TabSimpleSyntax(3, "typeToShort = GetTypeToShort();"));
+            tree.Add(new TabSimpleSyntax(3, "shortToTypeCode = GetShortToTypeCode();"));
+            tree.Add(new TabSimpleSyntax(3, "shortToDataType = GetShortToDataType();"));
+            tree.Add(new TabSimpleSyntax(3, "typeCodeToShort = GetTypeCodeToShort();"));
+            tree.Add(new RightScopeSyntax(2));
 
             return tree;
         }
@@ -2171,7 +2246,11 @@ namespace HECSFramework.Core.Generator
             tree.Add(new LeftScopeSyntax(2));
             tree.Add(new TabSimpleSyntax(3, "hashTypeToResolver = Map;"));
             tree.Add(new TabSimpleSyntax(3, "typeTohash = CommandsIDs;"));
+
+            ///this part of short ids, u should check GetShortIdPart()
+            tree.Add(new TabSimpleSyntax(3, "InitShortIds();"));
             tree.Add(new RightScopeSyntax(2));
+            tree.Add(new ParagraphSyntax());
 
             return tree;
         }
