@@ -1064,21 +1064,44 @@ namespace HECSFramework.Core.Generator
         {
             var list = new List<(string, string)>();
 
-            foreach (var c in Program.componentsDeclarations)
+            foreach (var c in Program.componentOverData.Values)
             {
-                var needContinue = false;
-                var neededClasses = Program.classes.Where(x => x.Identifier.ValueText == c.Identifier.ValueText);
-                var attr2 = neededClasses.SelectMany(x => x.AttributeLists).ToList();
+                if (c.IsAbstract)
+                    continue;
 
-                if (attr2 != null)
+                var needContinue = false;
+
+                if (c.IsPartial)
                 {
-                    foreach (var attributeList in attr2)
+                    var attr2 = c.Parts.SelectMany(x => x.AttributeLists);
+
+                    if (attr2 != null)
                     {
-                        foreach (var a in attributeList.Attributes)
+                        foreach (var attributeList in attr2)
                         {
-                            if (a.Name.ToString() == "HECSDefaultResolver")
+                            foreach (var a in attributeList.Attributes)
                             {
-                                containersSolve.Add(c);
+                                if (a.Name.ToString() == "HECSDefaultResolver")
+                                {
+                                    containersSolve.Add(c.ClassDeclaration);
+                                    needContinue = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    var attributeList = c.ClassDeclaration.AttributeLists;
+
+                    foreach (var a in attributeList)
+                    {
+                        foreach (var attr in a.Attributes)
+                        {
+                            if (attr.Name.ToString() == "HECSDefaultResolver")
+                            {
+                                containersSolve.Add(c.ClassDeclaration);
                                 needContinue = true;
                                 break;
                             }
@@ -1089,8 +1112,8 @@ namespace HECSFramework.Core.Generator
                 if (needContinue)
                     continue;
 
-                containersSolve.Add(c);
-                needResolver.Add(c);
+                containersSolve.Add(c.ClassDeclaration);
+                needResolver.Add(c.ClassDeclaration);
             }
 
 
@@ -2107,6 +2130,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(new UsingSyntax("Commands"));
             tree.Add(new UsingSyntax("Components"));
             tree.Add(new UsingSyntax("System"));
+            tree.Add(new UsingSyntax("HECSFramework.Serialize"));
             tree.Add(new UsingSyntax("System.Collections.Generic", 1));
             tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
             tree.Add(new LeftScopeSyntax());
@@ -2204,6 +2228,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(GetDictionaryHelper.GetDictionaryMethod("GetShortToTypeCode", "ushort", "int", 2, out var shortToTypeCodeBody));
             tree.Add(GetDictionaryHelper.GetDictionaryMethod("GetShortToDataType", "ushort", "byte", 2, out var getShortToDataType));
             tree.Add(GetDictionaryHelper.GetDictionaryMethod("GetTypeCodeToShort", "int", "ushort", 2, out var typeCodeToShort));
+            tree.Add(GetDictionaryHelper.GetDictionaryMethod("GetComponentProviders", "int", "ComponentSerializeProvider", 2, out var componentProviders));
 
             foreach (var i in shortIDs)
             {
@@ -2212,6 +2237,16 @@ namespace HECSFramework.Core.Generator
                 getShortToDataType.Tree.Add(GetDictionaryHelper.DictionaryBodyRecord(4, i.ShortId.ToString(), i.DataType.ToString()));
                 typeCodeToShort.Tree.Add(GetDictionaryHelper.DictionaryBodyRecord(4, i.TypeCode.ToString(), i.ShortId.ToString()));
             }
+
+            foreach (var c in Program.componentOverData.Values)
+            {
+                if (c.Interfaces.Any(x=> x.Name == INetworkComponent))
+                {
+                    componentProviders.Tree.Add(GetDictionaryHelper.DictionaryBodyRecord(4, 
+                        IndexGenerator.GenerateIndex(c.Name).ToString(), $"new ComponentResolver<{c.Name},{c.Name}{Resolver}, {c.Name}{Resolver}>()"));
+                }
+            }
+
 
             tree.Add(InitShortIDPart());
 
@@ -2228,6 +2263,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(new TabSimpleSyntax(3, "shortToTypeCode = GetShortToTypeCode();"));
             tree.Add(new TabSimpleSyntax(3, "shortToDataType = GetShortToDataType();"));
             tree.Add(new TabSimpleSyntax(3, "typeCodeToShort = GetTypeCodeToShort();"));
+            tree.Add(new TabSimpleSyntax(3, "componentProviders = GetComponentProviders();"));
             tree.Add(new RightScopeSyntax(2));
 
             return tree;

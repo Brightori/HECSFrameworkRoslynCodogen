@@ -139,7 +139,7 @@ namespace RoslynHECS
 
 
 
-            Console.WriteLine("нашли компоненты " + components.Count);
+            Console.WriteLine("нашли компоненты " + componentOverData.Count);
             SaveFiles();
             Console.WriteLine("успешно сохранено");
             //Thread.Sleep(1500);
@@ -783,8 +783,15 @@ namespace RoslynHECS
         public bool IsAbstract;
         public bool IsPartial;
         public bool IsGeneric;
+
+        //containts parts includes itself
         public HashSet<ClassDeclarationSyntax> Parts;
+        
+        //include all interfaces, include from parents
         public HashSet<LinkedInterfaceNode> Interfaces;
+        
+        //todo we should add name here for resolvers, this is support for resolvers with custom names
+        public string ResolverName;
 
         public override bool Equals(object obj)
         {
