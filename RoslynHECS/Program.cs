@@ -11,6 +11,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
+using RoslynHECS.DataTypes;
 using ClassDeclarationSyntax = Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax;
 using SyntaxNode = Microsoft.CodeAnalysis.SyntaxNode;
 
@@ -26,11 +27,14 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> localCommands = new List<StructDeclarationSyntax>(2048);
         public static List<StructDeclarationSyntax> networkCommands = new List<StructDeclarationSyntax>(2048);
 
+        public static Dictionary<string, ClassDeclarationSyntax> classesByName = new Dictionary<string, ClassDeclarationSyntax>(4000);
+        public static Dictionary<string, ResolverData> universalResolvers = new Dictionary<string, ResolverData>(256);
         public static Dictionary<string, InterfaceDeclarationSyntax> allInterfacesByName = new Dictionary<string, InterfaceDeclarationSyntax>(1024);
         public static Dictionary<string, LinkedNode> systemOverData = new Dictionary<string, LinkedNode>(512);
         public static Dictionary<string, LinkedNode> componentOverData = new Dictionary<string, LinkedNode>(512);
         public static Dictionary<string, LinkedInterfaceNode> interfacesOverData = new Dictionary<string, LinkedInterfaceNode>(512);
         public static Dictionary<string, LinkedGenericInterfaceNode> genericInterfacesOverData = new Dictionary<string, LinkedGenericInterfaceNode>(512);
+
 
         public static List<ClassDeclarationSyntax> classes;
         public static List<StructDeclarationSyntax> structs;
@@ -54,6 +58,7 @@ namespace RoslynHECS
         private const string SystemsBluePrintsPath = "/Scripts/BluePrints/SystemsBluePrint/";
 
         private const string BaseComponent = "BaseComponent";
+        private const string HECSManualResolver = "HECSManualResolver";
 
         private static bool resolversNeeded = true;
         private static bool bluePrintsNeeded = true;
@@ -136,8 +141,6 @@ namespace RoslynHECS
 
             foreach (var s in structs)
                 ProcessStructs(s);
-
-
 
             Console.WriteLine("нашли компоненты " + componentOverData.Count);
             SaveFiles();
@@ -271,6 +274,29 @@ namespace RoslynHECS
                 localCommands.AddOrRemoveElement(s, true);
                 networkCommands.AddOrRemoveElement(s, true);
                 Console.WriteLine("нашли локальную команду " + structCurrent);
+            }
+
+            if (s.AttributeLists.Count > 0)
+            {
+                foreach (var a in s.AttributeLists)
+                {
+                    foreach (var attr in a.Attributes)
+                    {
+                        if (attr.Name.ToString().Contains(HECSManualResolver))
+                        {
+                            var arguments = attr.ArgumentList.Arguments;
+
+                            foreach (var arg in arguments)
+                            {
+                                if (arg.Expression is TypeOfExpressionSyntax needed)
+                                {
+                                    var needeType = (needed.Type as IdentifierNameSyntax).Identifier.ValueText;
+                                    universalResolvers.Add(needeType, new ResolverData { StructDeclaration = s, TypeToResolve = needeType });
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -479,7 +505,6 @@ namespace RoslynHECS
                 ProcessLinkNodesComponents(ln);
             }
         }
-
 
         private static void GatherSystems()
         {
@@ -691,6 +716,12 @@ namespace RoslynHECS
             {
                 node = (ClassDeclarationSyntax)base.VisitClassDeclaration(node);
                 Classes.Add(node); // save your visited classes
+
+                if (!Program.classesByName.ContainsKey(node.Identifier.ValueText))
+                {
+                    Program.classesByName.Add(node.Identifier.ValueText, node);
+                }
+
                 return node;
             }
         }
