@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using HECSFramework.Core;
 using HECSFramework.Core.Generator;
@@ -12,6 +13,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
 using RoslynHECS.DataTypes;
+using RoslynHECS.Helpers;
+using static HECSFramework.Core.Generator.CodeGenerator;
 using ClassDeclarationSyntax = Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax;
 using SyntaxNode = Microsoft.CodeAnalysis.SyntaxNode;
 
@@ -27,14 +30,17 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> localCommands = new List<StructDeclarationSyntax>(2048);
         public static List<StructDeclarationSyntax> networkCommands = new List<StructDeclarationSyntax>(2048);
 
+        //resolvers collection
+        public static Dictionary<string, ResolverData> customHecsResolvers = new Dictionary<string, ResolverData>(256);
+        public static Dictionary<string, LinkedNode> hecsResolverCollection = new Dictionary<string, LinkedNode>(512);
+
+        public static Dictionary<string, StructDeclarationSyntax> structByName = new Dictionary<string, StructDeclarationSyntax>(4000);
         public static Dictionary<string, ClassDeclarationSyntax> classesByName = new Dictionary<string, ClassDeclarationSyntax>(4000);
-        public static Dictionary<string, ResolverData> universalResolvers = new Dictionary<string, ResolverData>(256);
         public static Dictionary<string, InterfaceDeclarationSyntax> allInterfacesByName = new Dictionary<string, InterfaceDeclarationSyntax>(1024);
         public static Dictionary<string, LinkedNode> systemOverData = new Dictionary<string, LinkedNode>(512);
         public static Dictionary<string, LinkedNode> componentOverData = new Dictionary<string, LinkedNode>(512);
         public static Dictionary<string, LinkedInterfaceNode> interfacesOverData = new Dictionary<string, LinkedInterfaceNode>(512);
         public static Dictionary<string, LinkedGenericInterfaceNode> genericInterfacesOverData = new Dictionary<string, LinkedGenericInterfaceNode>(512);
-
 
         public static List<ClassDeclarationSyntax> classes;
         public static List<StructDeclarationSyntax> structs;
@@ -53,12 +59,14 @@ namespace RoslynHECS
         private const string BluePrintsProvider = "BluePrintsProvider.cs";
         private const string Documentation = "Documentation.cs";
         private const string MapResolver = "MapResolver.cs";
+        private const string CustomAndUniversalResolvers = "CustomAndUniversalResolvers.cs";
 
         private const string ComponentsBluePrintsPath = "/Scripts/BluePrints/ComponentsBluePrints/";
         private const string SystemsBluePrintsPath = "/Scripts/BluePrints/SystemsBluePrint/";
 
         private const string BaseComponent = "BaseComponent";
         private const string HECSManualResolver = "HECSManualResolver";
+        private const string HECSResolver = "HECSResolver";
 
         private static bool resolversNeeded = true;
         private static bool bluePrintsNeeded = true;
@@ -186,6 +194,7 @@ namespace RoslynHECS
                 var path = HECSGenerated + @"Resolvers\";
                 var resolvers = processGeneration.GetSerializationResolvers();
                 SaveToFile(MapResolver, processGeneration.GetResolverMap(), HECSGenerated);
+                SaveToFile(CustomAndUniversalResolvers, processGeneration.GetCustomResolversMap(), HECSGenerated);
 
                 CleanDirectory(path);
 
@@ -197,6 +206,8 @@ namespace RoslynHECS
             {
                 var commandMap = processGeneration.GenerateNetworkCommandsAndShortIdsMap(networkCommands);
                 SaveToFile("CommandsMap.cs", commandMap, HECSGenerated);
+
+                typeof(ClassDeclarationSyntax).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | BindingFlags.FlattenHierarchy);
             }
 
             if (bluePrintsNeeded)
@@ -276,6 +287,7 @@ namespace RoslynHECS
                 Console.WriteLine("нашли локальную команду " + structCurrent);
             }
 
+            //we add here custom resolvers what alrdy on project
             if (s.AttributeLists.Count > 0)
             {
                 foreach (var a in s.AttributeLists)
@@ -291,7 +303,7 @@ namespace RoslynHECS
                                 if (arg.Expression is TypeOfExpressionSyntax needed)
                                 {
                                     var needeType = (needed.Type as IdentifierNameSyntax).Identifier.ValueText;
-                                    universalResolvers.Add(needeType, new ResolverData { StructDeclaration = s, TypeToResolve = needeType });
+                                    customHecsResolvers.Add(needeType, new ResolverData { TypeToResolve = needeType, ResolverName = s.Identifier.ValueText });
                                 }
                             }
                         }
@@ -405,35 +417,28 @@ namespace RoslynHECS
             foreach (var comp in componentOverData.Values)
             {
                 if (comp.IsAbstract) continue;
-
                 componentsDeclarations.Add(comp.ClassDeclaration);
             }
-        }
 
-        private static bool IsComponent(ClassDeclarationSyntax c)
-        {
-            var baseClass = c.BaseList != null ? c.BaseList.ChildNodes()?.ToList() : new List<SyntaxNode>(0);
-
-            if (baseClass.Count == 0)
-                return false;
-
-            //todo костыль, надо компоненты искать не снизу вверх, а сверху вниз, и выстроить их в ноды 
-            if (baseClass.Any(x => x.ToString().Contains("AnimatorParameter")))
-                return false;
-
-            if (baseClass.Any(x => x.ToString().Contains(BaseComponent)))
-                return true;
-
-            var gatherParents = classes.Where(x => baseClass.Any(z => z.ToString() == x.Identifier.ValueText));
-
-
-            foreach (var parent in gatherParents)
+            //we gather here classes 
+            foreach (var c in classes)
             {
-                if (IsComponent(parent))
-                    return true;
+                if (c.AttributeLists.Count > 0)
+                {
+                    foreach (var a in c.AttributeLists)
+                    {
+                        foreach (var attr in a.Attributes)
+                        {
+                            if (attr.ToString().Contains(HECSResolver))
+                            {
+                                var name = c.Identifier.ValueText;
+                                hecsResolverCollection.Add(c.Identifier.ValueText, LinkedNodeHelper.GetLinkedNode(c));
+                                customHecsResolvers.Add(name, new ResolverData { TypeToResolve = name, ResolverName = name + Resolver });
+                            }
+                        }
+                    }
+                }
             }
-
-            return false;
         }
 
         private static void GatherComponents()
@@ -577,7 +582,7 @@ namespace RoslynHECS
 
         private static void ProcessLinkNodesComponents(LinkedNode linkedNode)
         {
-            IEnumerable<ClassDeclarationSyntax> children = null; 
+            IEnumerable<ClassDeclarationSyntax> children = null;
 
             if (linkedNode.IsGeneric)
             {
@@ -714,7 +719,7 @@ namespace RoslynHECS
 
             public override SyntaxNode VisitClassDeclaration(ClassDeclarationSyntax node)
             {
-                node = (ClassDeclarationSyntax)base.VisitClassDeclaration(node);
+                base.VisitClassDeclaration(node);
                 Classes.Add(node); // save your visited classes
 
                 if (!Program.classesByName.ContainsKey(node.Identifier.ValueText))
@@ -815,14 +820,22 @@ namespace RoslynHECS
         public bool IsPartial;
         public bool IsGeneric;
 
+        public IEnumerable<LinkedNode> GetParents()
+        {
+            var currentNode = this;
+
+            while (Parent != null)
+            {
+                currentNode = currentNode.Parent;
+                yield return currentNode;
+            }
+        }
+
         //containts parts includes itself
-        public HashSet<ClassDeclarationSyntax> Parts;
-        
+        public HashSet<ClassDeclarationSyntax> Parts = new HashSet<ClassDeclarationSyntax>(8);
+
         //include all interfaces, include from parents
-        public HashSet<LinkedInterfaceNode> Interfaces;
-        
-        //todo we should add name here for resolvers, this is support for resolvers with custom names
-        public string ResolverName;
+        public HashSet<LinkedInterfaceNode> Interfaces = new HashSet<LinkedInterfaceNode>(8);
 
         public override bool Equals(object obj)
         {

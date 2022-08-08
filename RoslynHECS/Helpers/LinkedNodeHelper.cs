@@ -6,11 +6,8 @@ namespace RoslynHECS.Helpers
 {
     public static class LinkedNodeHelper
     {
-        public static LinkedNode GetLinkedNode(ClassDeclarationSyntax obj, Dictionary<string, LinkedNode> nodesCollection)
+        public static LinkedNode GetLinkedNode(ClassDeclarationSyntax obj)
         {
-            if (nodesCollection.ContainsKey(obj.Identifier.ValueText))
-                return nodesCollection[obj.Identifier.ValueText];   
-
             var name = obj.Identifier.ValueText;
             var linkedNode = new LinkedNode()
             {
@@ -20,14 +17,13 @@ namespace RoslynHECS.Helpers
                 IsAbstract = obj.Modifiers.Any(x => x.ValueText == "abstract"),
                 IsPartial = obj.Modifiers.Any(x => x.ValueText == "partial"),
                 IsGeneric = obj.TypeParameterList != null,
-                Parts = new HashSet<ClassDeclarationSyntax>(),
-                Interfaces = new HashSet<LinkedInterfaceNode>(),
+                Parts = new HashSet<ClassDeclarationSyntax>(8),
+                Interfaces = new HashSet<LinkedInterfaceNode>(8),
             };
-
-            var parts = Program.classes.Where(x => x.Identifier.ValueText == name);
 
             if (linkedNode.IsPartial)
             {
+                var parts = Program.classes.Where(x => x.Identifier.ValueText == name);
                 foreach (var part in parts)
                 {
                     if (part == obj) continue;
@@ -42,17 +38,16 @@ namespace RoslynHECS.Helpers
 
             if (obj.BaseList != null)
             {
-                foreach (var b in obj.BaseList.Types) 
-                { 
+                foreach (var b in obj.BaseList.Types)
+                {
                     if (Program.classesByName.TryGetValue(b.ToString(), out var needed))
                     {
-                        linkedNode.Parent = GetLinkedNode(needed, nodesCollection);
+                        linkedNode.Parent = GetLinkedNode(needed);
                         break;
                     }
                 }
             }
 
-            nodesCollection.TryAdd(name, linkedNode);
             return linkedNode;
         }
     }

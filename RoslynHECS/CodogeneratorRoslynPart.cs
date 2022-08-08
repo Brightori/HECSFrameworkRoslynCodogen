@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using HECSFramework.Core.Helpers;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using RoslynHECS;
@@ -1311,7 +1312,7 @@ namespace HECSFramework.Core.Generator
             return tree;
         }
 
-        public (bool valid, int Order, string resolver) IsValidField(FieldDeclarationSyntax fieldDeclarationSyntax)
+        public (bool valid, int Order, string resolver) IsValidField(MemberDeclarationSyntax fieldDeclarationSyntax)
         {
             foreach (var a in fieldDeclarationSyntax.AttributeLists.SelectMany(x => x.Attributes).ToArray())
             {
@@ -1339,6 +1340,17 @@ namespace HECSFramework.Core.Generator
             }
 
             return (false, -1, string.Empty);
+        }
+
+        public ISyntax GetNameSpaceForCollection(MemberDeclarationSyntax declaration)
+        {
+            var tree = new TreeSyntaxNode();
+
+            //((declaration as FieldDeclarationSyntax).Declaration.Type as GenericNameSyntax).TypeArgumentList
+
+
+
+            return tree;
         }
 
         public (bool isValid, string nameSpace) GetNameSpaceForCollection(PropertyDeclarationSyntax propertyDeclaration)
@@ -1967,10 +1979,229 @@ namespace HECSFramework.Core.Generator
             tree.Add(new TabSimpleSyntax(3, "ProcessResolverContainer = ProcessResolverContainerRealisation;"));
             tree.Add(new TabSimpleSyntax(3, "GetComponentFromContainer = GetComponentFromContainerFuncRealisation;"));
             tree.Add(new TabSimpleSyntax(3, "InitPartialCommandResolvers();"));
+            tree.Add(new TabSimpleSyntax(3, "InitCustomResolvers();"));
+            tree.Add(new RightScopeSyntax(2));
+            tree.Add(new TabSimpleSyntax(2, "partial void InitCustomResolvers();"));
+            return tree;
+        }
+        #endregion
+
+        #region CustomAndUniversalResolvers
+
+        public string GetCustomResolversMap()
+        {
+            var tree = new TreeSyntaxNode();
+            var usings = new TreeSyntaxNode();
+            tree.Add(usings);
+            
+            usings.AddUnique(new UsingSyntax("System"));
+            usings.AddUnique(new UsingSyntax("System.Collections.Generic"));
+            tree.Add(new ParagraphSyntax());
+            tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
+            tree.Add(new LeftScopeSyntax());
+            tree.Add(GetUniversalResolvers());
+            tree.Add(new TabSimpleSyntax(1, "public partial class ResolversMap"));
+            tree.Add(new LeftScopeSyntax(1));
+            tree.Add(GetCustomProvidersPartialInitMethod());
+            tree.Add(GetDictionaryHelper.GetDictionaryMethod("GetTypeToCustomResolver", "Type", "CustomResolverProviderBase", 2, out var customTypeToResolvers));
+            tree.Add(GetDictionaryHelper.GetDictionaryMethod("GetTypeCodeToCustomResolver", "int", "CustomResolverProviderBase", 2, out var typeCodeToCustomResolver));
+            tree.Add(GetDictionaryHelper.GetDictionaryMethod("GetTypeIndexToType", "int", "Type", 2, out var typeIndexToType));
+            tree.Add(new RightScopeSyntax(1));
+            tree.Add(new RightScopeSyntax());
+
+            foreach (var cr in Program.customHecsResolvers)
+            {
+                if (Program.classesByName.TryGetValue(cr.Key, out var classNeeded))
+                {
+                    if (classNeeded.Parent is NamespaceDeclarationSyntax namespaceDeclaration)
+                    {
+                        usings.AddUnique(new UsingSyntax(namespaceDeclaration.Name.ToString()));
+                    }
+                }
+
+                customTypeToResolvers.Tree.Add(GetDictionaryHelper.DictionaryBodyRecord(4, $"typeof({cr.Key})",
+                    $"new CustomResolverProvider<{cr.Key}, {cr.Value.ResolverName}>()"));
+
+                typeCodeToCustomResolver.Tree.Add(GetDictionaryHelper.DictionaryBodyRecord(4, $"{IndexGenerator.GenerateIndex(cr.Key)}",
+                    $"new CustomResolverProvider<{cr.Key}, {cr.Value.ResolverName}>()"));
+
+                typeIndexToType.Tree.Add(GetDictionaryHelper.DictionaryBodyRecord(4, $"{IndexGenerator.GenerateIndex(cr.Key)}",
+                    $"typeof({cr.Key})"));
+            }
+
+            usings.Add(new ParagraphSyntax());
+            return tree.ToString();
+        }
+
+        private ISyntax GetUniversalResolvers()
+        {
+            var tree = new TreeSyntaxNode();
+            foreach (var ur in Program.hecsResolverCollection)
+            {
+                var check = GetUniversalResolver(ur.Value);
+            }
+
+            return tree;
+        }
+
+        private ISyntax GetUniversalResolver(LinkedNode c)
+        {
+            var baselist = new HashSet<ClassDeclarationSyntax>(16);
+            c.GetAllParentsAndParts(baselist);
+
+            var tree = new TreeSyntaxNode();
+            var usings = new TreeSyntaxNode();
+            var fields = new TreeSyntaxNode();
+            var constructor = new TreeSyntaxNode();
+            var defaultConstructor = new TreeSyntaxNode();
+            var outFunc = new TreeSyntaxNode();
+            var out2EntityFunc = new TreeSyntaxNode();
+
+            var name = c.Name;
+
+            tree.Add(usings);
+            usings.Add(new UsingSyntax("Components"));
+            usings.Add(new UsingSyntax("System"));
+            usings.Add(new UsingSyntax("MessagePack"));
+            usings.Add(new UsingSyntax("HECSFramework.Serialize"));
+            usings.Add(new UsingSyntax("Commands"));
+
+            tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
+            tree.Add(new LeftScopeSyntax());
+            tree.Add(new TabSimpleSyntax(1, "[MessagePackObject, Serializable]"));
+            tree.Add(new TabSimpleSyntax(1, $"public struct {name + Resolver} : IResolver<{name}>, IResolver<{name + Resolver},{name}>, IData"));
+            tree.Add(new LeftScopeSyntax(1));
+            tree.Add(fields);
+            tree.Add(new ParagraphSyntax());
+            tree.Add(new TabSimpleSyntax(2, $"public {name + Resolver} In(ref {name} {name.ToLower()})"));
+            tree.Add(new LeftScopeSyntax(2));
+            tree.Add(constructor);
+            tree.Add(new RightScopeSyntax(2));
+            //tree.Add(new ParagraphSyntax());
+            //tree.Add(defaultConstructor);
+            //tree.Add(new ParagraphSyntax());
+            tree.Add(new TabSimpleSyntax(2, $"public void Out(ref {typeof(IEntity).Name} entity)"));
+            tree.Add(new LeftScopeSyntax(2));
+            //tree.Add(GetOutToEntityVoidBodyRoslyn(c));
+            tree.Add(new RightScopeSyntax(2));
+
+            tree.Add(new TabSimpleSyntax(2, $"public void Out(ref {name} {name.ToLower()})"));
+            tree.Add(new LeftScopeSyntax(2));
+            tree.Add(outFunc);
+            tree.Add(new RightScopeSyntax(2));
+            tree.Add(new RightScopeSyntax(1));
+            tree.Add(new RightScopeSyntax());
+
+            if (baselist.Any(x => x != null && x.ChildNodes().Any(z => z != null && z.ToString() == "IBeforeSerializationComponent")))
+                constructor.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.BeforeSync();"));
+
+            //((c.Members.ToArray()[0] as FieldDeclarationSyntax).AttributeLists.ToArray()[0].Attributes.ToArray()[0] as AttributeSyntax).ArgumentList.Arguments.ToArray()[0].ToString()
+            var typeFields = new List<GatheredField>(128);
+            List<(string type, string name)> fieldsForConstructor = new List<(string type, string name)>();
+
+            foreach (var parts in baselist)
+            {
+                foreach (var m in parts.Members)
+                {
+                    if (m is MemberDeclarationSyntax field)
+                    {
+                        var validate = IsValidField(field);
+                        var getCollectionNameSpace = GetNameSpaceForCollection(field);
+
+                        //if (getCollectionNameSpace.isValid)
+                        //{
+                        //    foreach (var t in getCollectionNameSpace.nameSpace.Tree)
+                        //        AddUniqueSyntax(usings, t);
+                        //}
+
+                        //if (validate.valid)
+                        //{
+                        //    var getNameSpace = GetNamespaces(field.Declaration.Type.ToString());
+                        //    var getListNameSpace = GetListNameSpace(field);
+
+                        //    if (getListNameSpace != string.Empty)
+                        //        AddUniqueSyntax(usings, new UsingSyntax(getListNameSpace));
+
+                        //    foreach (var n in getNameSpace.Tree)
+                        //        AddUniqueSyntax(usings, n);
+
+                        //    if (typeFields.Any(x => x.Order == validate.Order || x.FieldName == field.Declaration.Variables[0].Identifier.ToString()))
+                        //        continue;
+
+                        //    typeFields.Add(new GatheredField
+                        //    {
+                        //        Order = validate.Order,
+                        //        Type = field.Declaration.Type.ToString(),
+                        //        FieldName = field.Declaration.Variables[0].Identifier.ToString(),
+                        //        ResolverName = validate.resolver,
+                        //        Node = field
+                        //    });
+                        //}
+                    }
+                }
+            }
+
+            typeFields = typeFields.Distinct().ToList();
+
+            foreach (var f in typeFields)
+            {
+
+                fields.Add(new TabSimpleSyntax(2, $"[Key({f.Order})]"));
+
+                if (string.IsNullOrEmpty(f.ResolverName))
+                    fields.Add(new TabSimpleSyntax(2, $"public {f.Type} {f.FieldName};"));
+                else
+                    fields.Add(new TabSimpleSyntax(2, $"public {f.ResolverName} {f.FieldName};"));
+
+                fieldsForConstructor.Add((f.Type, f.FieldName));
+
+                if (f.Node is PropertyDeclarationSyntax declarationSyntax && declarationSyntax.Type.ToString().Contains("ReactiveValue"))
+                {
+                    constructor.Add(new TabSimpleSyntax(3, $"this.{f.FieldName} = {c.Name.ToLower()}.{f.FieldName}.CurrentValue;"));
+                    outFunc.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.{f.FieldName}.CurrentValue = this.{f.FieldName};"));
+                }
+                else
+                {
+                    if (string.IsNullOrEmpty(f.ResolverName))
+                    {
+                        constructor.Add(new TabSimpleSyntax(3, $"this.{f.FieldName} = {c.Name.ToLower()}.{f.FieldName};"));
+                        outFunc.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.{f.FieldName} = this.{f.FieldName};"));
+                    }
+                    else
+                    {
+                        AddUniqueSyntax(usings, new UsingSyntax("HECSFramework.Serialize"));
+                        constructor.Add(new TabSimpleSyntax(3, $"this.{f.FieldName} = new {f.ResolverName}().In(ref {c.Name.ToLower()}.{f.FieldName});"));
+                        outFunc.Add(new TabSimpleSyntax(3, $"this.{f.FieldName}.Out(ref {c.Name.ToLower()}.{f.FieldName});"));
+                    }
+                }
+            }
+
+            if (baselist.Any(x => x != null && x.ChildNodes().Any(z => z != null && z.ToString() == "IAfterSerializationComponent")))
+            {
+                outFunc.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.AfterSync();"));
+            }
+
+            ////defaultConstructor.Add(DefaultConstructor(c, fieldsForConstructor, fields, constructor));
+            constructor.Add(new TabSimpleSyntax(3, "return this;"));
+
+            usings.Add(new ParagraphSyntax());
+            return tree;
+        }
+
+        private ISyntax GetCustomProvidersPartialInitMethod()
+        {
+            var tree = new TreeSyntaxNode();
+
+            tree.Add(new TabSimpleSyntax(2, "partial void InitCustomResolvers()"));
+            tree.Add(new LeftScopeSyntax(2));
+            tree.Add(new TabSimpleSyntax(3, "typeToCustomResolver = GetTypeToCustomResolver();"));
+            tree.Add(new TabSimpleSyntax(3, "typeCodeToCustomResolver = GetTypeCodeToCustomResolver();"));
             tree.Add(new RightScopeSyntax(2));
 
             return tree;
         }
+
+
         #endregion
 
         #region BluePrintsProvider
@@ -2240,9 +2471,9 @@ namespace HECSFramework.Core.Generator
 
             foreach (var c in Program.componentOverData.Values)
             {
-                if (c.Interfaces.Any(x=> x.Name == INetworkComponent))
+                if (c.Interfaces.Any(x => x.Name == INetworkComponent))
                 {
-                    componentProviders.Tree.Add(GetDictionaryHelper.DictionaryBodyRecord(4, 
+                    componentProviders.Tree.Add(GetDictionaryHelper.DictionaryBodyRecord(4,
                         IndexGenerator.GenerateIndex(c.Name).ToString(), $"new ComponentResolver<{c.Name},{c.Name}{Resolver}, {c.Name}{Resolver}>()"));
                 }
             }
