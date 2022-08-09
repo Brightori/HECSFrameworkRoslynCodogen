@@ -1342,15 +1342,108 @@ namespace HECSFramework.Core.Generator
             return (false, -1, string.Empty);
         }
 
-        public ISyntax GetNameSpaceForCollection(MemberDeclarationSyntax declaration)
+        public void GetNamespace(MemberDeclarationSyntax declaration, TreeSyntaxNode tree)
         {
-            var tree = new TreeSyntaxNode();
+            if (declaration is FieldDeclarationSyntax field)
+            {
+                if (field.Declaration.Type is GenericNameSyntax generic)
+                {
+                    foreach (var a in generic.TypeArgumentList.Arguments)
+                    {
+                        var arg = a.ToString();
 
-            //((declaration as FieldDeclarationSyntax).Declaration.Type as GenericNameSyntax).TypeArgumentList
+                        if (Program.structByName.TryGetValue(arg, out var value))
+                        {
+                            if (value.Parent != null && value.Parent is NamespaceDeclarationSyntax ns)
+                            {
+                                tree.AddUnique(new UsingSyntax(ns.Name.ToString()));
+                            }
+                        }
 
+                        if (Program.classesByName.TryGetValue(arg, out var classObject))
+                        {
+                            if (classObject.Parent != null && classObject.Parent is NamespaceDeclarationSyntax ns)
+                            {
+                                tree.AddUnique(new UsingSyntax(ns.Name.ToString()));
+                            }
+                        }
+                    }
+                }
+                else
+                {
 
+                    var arg = field.Declaration.Type.ToString();
 
-            return tree;
+                    if (Program.structByName.TryGetValue(arg, out var value))
+                    {
+                        if (value.Parent != null && value.Parent is NamespaceDeclarationSyntax ns)
+                        {
+                            tree.AddUnique(new UsingSyntax(ns.Name.ToString()));
+                        }
+                    }
+
+                    if (Program.classesByName.TryGetValue(arg, out var classObject))
+                    {
+                        if (classObject.Parent != null && classObject.Parent is NamespaceDeclarationSyntax ns)
+                        {
+                            tree.AddUnique(new UsingSyntax(ns.Name.ToString()));
+                        }
+                    }
+                }
+            }
+
+            if (declaration is PropertyDeclarationSyntax property)
+            {
+                var t = property.AccessorList.Accessors.FirstOrDefault(x => x.Keyword.Text == "set");
+
+                if (t == null || t.Modifiers.Any(x => x.IsKind(SyntaxKind.PrivateKeyword) || x.IsKind(SyntaxKind.ProtectedKeyword)))
+                    return;
+
+                if (property.Type is GenericNameSyntax generic)
+                {
+                    foreach (var a in generic.TypeArgumentList.Arguments)
+                    {
+                        var arg = a.ToString();
+
+                        if (Program.structByName.TryGetValue(arg, out var value))
+                        {
+                            if (value.Parent != null && value.Parent is NamespaceDeclarationSyntax ns)
+                            {
+                                tree.AddUnique(new UsingSyntax(ns.Name.ToString()));
+                            }
+                        }
+
+                        if (Program.classesByName.TryGetValue(arg, out var classObject))
+                        {
+                            if (classObject.Parent != null && classObject.Parent is NamespaceDeclarationSyntax ns)
+                            {
+                                tree.AddUnique(new UsingSyntax(ns.Name.ToString()));
+                            }
+                        }
+                    }
+                }
+                else
+                {
+
+                    var arg = property.Type.ToString();
+
+                    if (Program.structByName.TryGetValue(arg, out var value))
+                    {
+                        if (value.Parent != null && value.Parent is NamespaceDeclarationSyntax ns)
+                        {
+                            tree.AddUnique(new UsingSyntax(ns.Name.ToString()));
+                        }
+                    }
+
+                    if (Program.classesByName.TryGetValue(arg, out var classObject))
+                    {
+                        if (classObject.Parent != null && classObject.Parent is NamespaceDeclarationSyntax ns)
+                        {
+                            tree.AddUnique(new UsingSyntax(ns.Name.ToString()));
+                        }
+                    }
+                }
+            }
         }
 
         public (bool isValid, string nameSpace) GetNameSpaceForCollection(PropertyDeclarationSyntax propertyDeclaration)
@@ -2060,11 +2153,11 @@ namespace HECSFramework.Core.Generator
             var name = c.Name;
 
             tree.Add(usings);
-            usings.Add(new UsingSyntax("Components"));
             usings.Add(new UsingSyntax("System"));
+            usings.Add(new UsingSyntax("Commands"));
+            usings.Add(new UsingSyntax("Components"));
             usings.Add(new UsingSyntax("MessagePack"));
             usings.Add(new UsingSyntax("HECSFramework.Serialize"));
-            usings.Add(new UsingSyntax("Commands"));
 
             tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
             tree.Add(new LeftScopeSyntax());
@@ -2103,40 +2196,35 @@ namespace HECSFramework.Core.Generator
             {
                 foreach (var m in parts.Members)
                 {
-                    if (m is MemberDeclarationSyntax field)
+                    if (m is MemberDeclarationSyntax member)
                     {
-                        var validate = IsValidField(field);
-                        var getCollectionNameSpace = GetNameSpaceForCollection(field);
+                        var validate = IsValidField(member);
 
-                        //if (getCollectionNameSpace.isValid)
-                        //{
-                        //    foreach (var t in getCollectionNameSpace.nameSpace.Tree)
-                        //        AddUniqueSyntax(usings, t);
-                        //}
+                        if (validate.valid)
+                            GetNamespace(member, usings);
 
-                        //if (validate.valid)
-                        //{
-                        //    var getNameSpace = GetNamespaces(field.Declaration.Type.ToString());
-                        //    var getListNameSpace = GetListNameSpace(field);
+                        string type = "";
+                        string fieldName = "";
 
-                        //    if (getListNameSpace != string.Empty)
-                        //        AddUniqueSyntax(usings, new UsingSyntax(getListNameSpace));
+//                        if (field is FieldDeclarationSyntax field)
+                        
+//{
+//                        }
 
-                        //    foreach (var n in getNameSpace.Tree)
-                        //        AddUniqueSyntax(usings, n);
+                        if (validate.valid)
+                        {
+                            if (typeFields.Any(x => x.Order == validate.Order || x.FieldName == member.Declaration.Variables[0].Identifier.ToString()))
+                                continue;
 
-                        //    if (typeFields.Any(x => x.Order == validate.Order || x.FieldName == field.Declaration.Variables[0].Identifier.ToString()))
-                        //        continue;
-
-                        //    typeFields.Add(new GatheredField
-                        //    {
-                        //        Order = validate.Order,
-                        //        Type = field.Declaration.Type.ToString(),
-                        //        FieldName = field.Declaration.Variables[0].Identifier.ToString(),
-                        //        ResolverName = validate.resolver,
-                        //        Node = field
-                        //    });
-                        //}
+                            typeFields.Add(new GatheredField
+                            {
+                                Order = validate.Order,
+                                Type = member.Declaration.Type.ToString(),
+                                FieldName = member.Declaration.Variables[0].Identifier.ToString(),
+                                ResolverName = validate.resolver,
+                                Node = member
+                            });
+                        }
                     }
                 }
             }

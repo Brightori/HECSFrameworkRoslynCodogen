@@ -258,13 +258,14 @@ namespace RoslynHECS
             }
             catch
             {
-                Console.WriteLine("не смогли ослить " + pathToDirectory);
+                Console.WriteLine("we cant save file to " + pathToDirectory);
             }
         }
 
         private static void ProcessStructs(StructDeclarationSyntax s)
         {
             var structCurrent = s.Identifier.ValueText;
+            structByName.TryAdd(structCurrent, s);
 
             if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains(typeof(IGlobalCommand).Name)))
             {
