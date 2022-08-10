@@ -1314,6 +1314,17 @@ namespace HECSFramework.Core.Generator
 
         public (bool valid, int Order, string resolver) IsValidField(MemberDeclarationSyntax fieldDeclarationSyntax)
         {
+            if (fieldDeclarationSyntax is PropertyDeclarationSyntax property)
+            {
+                if (property.AccessorList == null)
+                    return (false, -1, string.Empty);
+
+                var t = property.AccessorList.Accessors.FirstOrDefault(x => x.Keyword.Text == "set");
+
+                if (t == null || t.Modifiers.Any(x => x.IsKind(SyntaxKind.PrivateKeyword) || x.IsKind(SyntaxKind.ProtectedKeyword)))
+                    return (false, -1, string.Empty);
+            }
+
             foreach (var a in fieldDeclarationSyntax.AttributeLists.SelectMany(x => x.Attributes).ToArray())
             {
                 //todo "разобраться аккуратно с аттрибутами поля"
@@ -1342,7 +1353,7 @@ namespace HECSFramework.Core.Generator
             return (false, -1, string.Empty);
         }
 
-        public void GetNamespace(MemberDeclarationSyntax declaration, TreeSyntaxNode tree)
+        public void GetNamespace(MemberDeclarationSyntax declaration, ISyntax tree)
         {
             if (declaration is FieldDeclarationSyntax field)
             {
@@ -1394,10 +1405,7 @@ namespace HECSFramework.Core.Generator
 
             if (declaration is PropertyDeclarationSyntax property)
             {
-                var t = property.AccessorList.Accessors.FirstOrDefault(x => x.Keyword.Text == "set");
 
-                if (t == null || t.Modifiers.Any(x => x.IsKind(SyntaxKind.PrivateKeyword) || x.IsKind(SyntaxKind.ProtectedKeyword)))
-                    return;
 
                 if (property.Type is GenericNameSyntax generic)
                 {
@@ -2086,13 +2094,13 @@ namespace HECSFramework.Core.Generator
             var tree = new TreeSyntaxNode();
             var usings = new TreeSyntaxNode();
             tree.Add(usings);
-            
+
             usings.AddUnique(new UsingSyntax("System"));
             usings.AddUnique(new UsingSyntax("System.Collections.Generic"));
             tree.Add(new ParagraphSyntax());
             tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
             tree.Add(new LeftScopeSyntax());
-            tree.Add(GetUniversalResolvers());
+            tree.Add(GetUniversalResolvers(usings));
             tree.Add(new TabSimpleSyntax(1, "public partial class ResolversMap"));
             tree.Add(new LeftScopeSyntax(1));
             tree.Add(GetCustomProvidersPartialInitMethod());
@@ -2126,24 +2134,23 @@ namespace HECSFramework.Core.Generator
             return tree.ToString();
         }
 
-        private ISyntax GetUniversalResolvers()
+        private ISyntax GetUniversalResolvers(ISyntax usings)
         {
             var tree = new TreeSyntaxNode();
             foreach (var ur in Program.hecsResolverCollection)
             {
-                var check = GetUniversalResolver(ur.Value);
+                tree.Add(GetUniversalResolver(ur.Value, usings));
             }
 
             return tree;
         }
 
-        private ISyntax GetUniversalResolver(LinkedNode c)
+        private ISyntax GetUniversalResolver(LinkedNode c, ISyntax usings)
         {
             var baselist = new HashSet<ClassDeclarationSyntax>(16);
             c.GetAllParentsAndParts(baselist);
 
             var tree = new TreeSyntaxNode();
-            var usings = new TreeSyntaxNode();
             var fields = new TreeSyntaxNode();
             var constructor = new TreeSyntaxNode();
             var defaultConstructor = new TreeSyntaxNode();
@@ -2151,16 +2158,13 @@ namespace HECSFramework.Core.Generator
             var out2EntityFunc = new TreeSyntaxNode();
 
             var name = c.Name;
+            
+            usings.AddUnique(new UsingSyntax("System"));
+            usings.AddUnique(new UsingSyntax("Commands"));
+            usings.AddUnique(new UsingSyntax("Components"));
+            usings.AddUnique(new UsingSyntax("MessagePack"));
+            usings.AddUnique(new UsingSyntax("HECSFramework.Serialize"));
 
-            tree.Add(usings);
-            usings.Add(new UsingSyntax("System"));
-            usings.Add(new UsingSyntax("Commands"));
-            usings.Add(new UsingSyntax("Components"));
-            usings.Add(new UsingSyntax("MessagePack"));
-            usings.Add(new UsingSyntax("HECSFramework.Serialize"));
-
-            tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
-            tree.Add(new LeftScopeSyntax());
             tree.Add(new TabSimpleSyntax(1, "[MessagePackObject, Serializable]"));
             tree.Add(new TabSimpleSyntax(1, $"public struct {name + Resolver} : IResolver<{name}>, IResolver<{name + Resolver},{name}>, IData"));
             tree.Add(new LeftScopeSyntax(1));
@@ -2183,7 +2187,6 @@ namespace HECSFramework.Core.Generator
             tree.Add(outFunc);
             tree.Add(new RightScopeSyntax(2));
             tree.Add(new RightScopeSyntax(1));
-            tree.Add(new RightScopeSyntax());
 
             if (baselist.Any(x => x != null && x.ChildNodes().Any(z => z != null && z.ToString() == "IBeforeSerializationComponent")))
                 constructor.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.BeforeSync();"));
@@ -2200,27 +2203,39 @@ namespace HECSFramework.Core.Generator
                     {
                         var validate = IsValidField(member);
 
-                        if (validate.valid)
-                            GetNamespace(member, usings);
+                        if (!validate.valid) continue;
+
+
+                        GetNamespace(member, usings);
 
                         string type = "";
                         string fieldName = "";
 
-//                        if (field is FieldDeclarationSyntax field)
-                        
-//{
-//                        }
+                        if (member is FieldDeclarationSyntax field)
+                        {
+                            fieldName = field.Declaration.Variables[0].Identifier.ToString();
+                            type = field.Declaration.Type.ToString();
+                        }
+
+                        if (member is PropertyDeclarationSyntax property)
+                        {
+                            fieldName = property.Identifier.Text;
+                            type = property.Type.ToString();
+                        }
+
+                        if (string.IsNullOrEmpty(type) || string.IsNullOrEmpty(fieldName))
+                            throw new Exception("we dont have type for field " + m.ToString());
 
                         if (validate.valid)
                         {
-                            if (typeFields.Any(x => x.Order == validate.Order || x.FieldName == member.Declaration.Variables[0].Identifier.ToString()))
+                            if (typeFields.Any(x => x.Order == validate.Order || x.FieldName == fieldName))
                                 continue;
 
                             typeFields.Add(new GatheredField
                             {
                                 Order = validate.Order,
-                                Type = member.Declaration.Type.ToString(),
-                                FieldName = member.Declaration.Variables[0].Identifier.ToString(),
+                                Type = type,
+                                FieldName = fieldName,
                                 ResolverName = validate.resolver,
                                 Node = member
                             });
@@ -2272,7 +2287,7 @@ namespace HECSFramework.Core.Generator
             ////defaultConstructor.Add(DefaultConstructor(c, fieldsForConstructor, fields, constructor));
             constructor.Add(new TabSimpleSyntax(3, "return this;"));
 
-            usings.Add(new ParagraphSyntax());
+            usings.Tree.Add(new ParagraphSyntax());
             return tree;
         }
 
