@@ -2166,20 +2166,13 @@ namespace HECSFramework.Core.Generator
             usings.AddUnique(new UsingSyntax("HECSFramework.Serialize"));
 
             tree.Add(new TabSimpleSyntax(1, "[MessagePackObject, Serializable]"));
-            tree.Add(new TabSimpleSyntax(1, $"public struct {name + Resolver} : IResolver<{name}>, IResolver<{name + Resolver},{name}>, IData"));
+            tree.Add(new TabSimpleSyntax(1, $"public struct {name + Resolver} : IResolver<{name + Resolver},{name}>, IData"));
             tree.Add(new LeftScopeSyntax(1));
             tree.Add(fields);
             tree.Add(new ParagraphSyntax());
             tree.Add(new TabSimpleSyntax(2, $"public {name + Resolver} In(ref {name} {name.ToLower()})"));
             tree.Add(new LeftScopeSyntax(2));
             tree.Add(constructor);
-            tree.Add(new RightScopeSyntax(2));
-            //tree.Add(new ParagraphSyntax());
-            //tree.Add(defaultConstructor);
-            //tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(2, $"public void Out(ref {typeof(IEntity).Name} entity)"));
-            tree.Add(new LeftScopeSyntax(2));
-            //tree.Add(GetOutToEntityVoidBodyRoslyn(c));
             tree.Add(new RightScopeSyntax(2));
 
             tree.Add(new TabSimpleSyntax(2, $"public void Out(ref {name} {name.ToLower()})"));
@@ -2188,7 +2181,11 @@ namespace HECSFramework.Core.Generator
             tree.Add(new RightScopeSyntax(2));
             tree.Add(new RightScopeSyntax(1));
 
-            if (baselist.Any(x => x != null && x.ChildNodes().Any(z => z != null && z.ToString() == "IBeforeSerializationComponent")))
+
+            c.Interfaces.Clear();
+            c.GetInterfaces(c.Interfaces);
+
+            if (c.Interfaces.Any(x => x.Name == "IBeforeSerializationComponent"))
                 constructor.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.BeforeSync();"));
 
             //((c.Members.ToArray()[0] as FieldDeclarationSyntax).AttributeLists.ToArray()[0].Attributes.ToArray()[0] as AttributeSyntax).ArgumentList.Arguments.ToArray()[0].ToString()
@@ -2279,7 +2276,7 @@ namespace HECSFramework.Core.Generator
                 }
             }
 
-            if (baselist.Any(x => x != null && x.ChildNodes().Any(z => z != null && z.ToString() == "IAfterSerializationComponent")))
+            if (c.Interfaces.Any(x => x.Name == "IAfterSerializationComponent"))
             {
                 outFunc.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.AfterSync();"));
             }
@@ -2299,6 +2296,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(new LeftScopeSyntax(2));
             tree.Add(new TabSimpleSyntax(3, "typeToCustomResolver = GetTypeToCustomResolver();"));
             tree.Add(new TabSimpleSyntax(3, "typeCodeToCustomResolver = GetTypeCodeToCustomResolver();"));
+            tree.Add(new TabSimpleSyntax(3, "getTypeIndexToType = GetTypeIndexToType();"));
             tree.Add(new RightScopeSyntax(2));
 
             return tree;

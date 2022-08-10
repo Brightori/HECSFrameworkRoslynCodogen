@@ -290,7 +290,7 @@ namespace RoslynHECS
 
             //we add here custom resolvers what alrdy on project
             if (s.AttributeLists.Count > 0)
-            {
+            { 
                 foreach (var a in s.AttributeLists)
                 {
                     foreach (var attr in a.Attributes)
@@ -303,8 +303,16 @@ namespace RoslynHECS
                             {
                                 if (arg.Expression is TypeOfExpressionSyntax needed)
                                 {
-                                    var needeType = (needed.Type as IdentifierNameSyntax).Identifier.ValueText;
-                                    customHecsResolvers.Add(needeType, new ResolverData { TypeToResolve = needeType, ResolverName = s.Identifier.ValueText });
+                                    if (needed.Type is IdentifierNameSyntax identifierNameSyntax)
+                                    {
+                                        var needeType = identifierNameSyntax.Identifier.ValueText;
+                                        customHecsResolvers.Add(needeType, new ResolverData { TypeToResolve = needeType, ResolverName = s.Identifier.ValueText });
+                                    }
+                                    else if (needed.Type is PredefinedTypeSyntax predefinedTypeSyntax)
+                                    {
+                                        var needeType = predefinedTypeSyntax.ToString();
+                                        customHecsResolvers.Add(needeType, new ResolverData { TypeToResolve = needeType, ResolverName = s.Identifier.ValueText });
+                                    }
                                 }
                             }
                         }
@@ -852,6 +860,36 @@ namespace RoslynHECS
 
         public void GetInterfaces(HashSet<LinkedInterfaceNode> interfaces)
         {
+            if (IsPartial)
+            {
+                foreach (var p in Parts)
+                {
+                    if (p.BaseList != null)
+                    {
+                        foreach (var t in p.BaseList.Types)
+                        {
+                            if (Program.interfacesOverData.TryGetValue(t.ToString(), out var node))
+                            {
+                                interfaces.Add(node);
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                if (ClassDeclaration.BaseList != null)
+                {
+                    foreach (var t in ClassDeclaration.BaseList.Types)
+                    {
+                        if (Program.interfacesOverData.TryGetValue(t.ToString(), out var node))
+                        {
+                            interfaces.Add(node);
+                        }
+                    }
+                }
+            }
+
             foreach (var i in interfaces)
             {
                 i.GetInterfaces(interfaces);
