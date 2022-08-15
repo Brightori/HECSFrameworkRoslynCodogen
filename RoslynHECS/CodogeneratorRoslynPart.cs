@@ -33,7 +33,9 @@ namespace HECSFramework.Core.Generator
         public const string IReactComponentLocal = "IReactComponentLocal";
         public const string IReactComponentGlobal = "IReactComponentGlobal";
         public const string CurrentSystem = "currentSystem";
-
+        
+        public const string IReactNetworkCommandGlobal = "IReactNetworkCommandGlobal";
+        public const string IReactNetworkCommandLocal = "IReactNetworkCommandLocal";
 
         private HashSet<LinkedInterfaceNode> interfaceCache = new HashSet<LinkedInterfaceNode>(64);
         private HashSet<LinkedGenericInterfaceNode> interfaceGenericCache = new HashSet<LinkedGenericInterfaceNode>(64);
@@ -170,6 +172,22 @@ namespace HECSFramework.Core.Generator
                     bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactComponent<{part.GenericType}>(system, {CurrentSystem});"));
                     unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactComponent<{part.GenericType}>(system);"));
                     break;
+            }
+
+            if (Program.CommandMapNeeded)
+            {
+                switch (part.BaseInterface.Name)
+                {
+                    case IReactNetworkCommandGlobal:
+                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.NetworkCommandService.AddListener<{part.GenericType}>(system, {CurrentSystem});"));
+                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.NetworkCommandService.RemoveListener<{part.GenericType}>(system);"));
+                        break;
+
+                    case IReactNetworkCommandLocal:
+                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.LocalNetworkCommandService.AddListener<{part.GenericType}>(system, {CurrentSystem});"));
+                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.LocalNetworkCommandService.RemoveListener<{part.GenericType}>(system);"));
+                        break;
+                }
             }
         }
 
