@@ -1328,7 +1328,7 @@ namespace HECSFramework.Core.Generator
             foreach (var a in fieldDeclarationSyntax.AttributeLists.SelectMany(x => x.Attributes).ToArray())
             {
                 //todo "разобраться аккуратно с аттрибутами поля"
-                if (a.ToString().Contains("Field") && !a.ToString().Contains("Replication") && fieldDeclarationSyntax.Modifiers.ToString().Contains("public"))
+                if (a.Name.ToString() == ("Field") && fieldDeclarationSyntax.Modifiers.ToString().Contains("public"))
                 {
                     if (a.ArgumentList == null)
                         continue;
