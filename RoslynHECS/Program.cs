@@ -72,6 +72,8 @@ namespace RoslynHECS
         private static bool bluePrintsNeeded = true;
         private static bool commandMapneeded = true;
 
+        public static bool CommandMapNeeded => commandMapneeded;
+
         private static HashSet<LinkedInterfaceNode> interfaceCache = new HashSet<LinkedInterfaceNode>(32);
 
         static async Task Main(string[] args)
