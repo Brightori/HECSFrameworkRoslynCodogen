@@ -60,6 +60,7 @@ namespace RoslynHECS
         private const string Documentation = "Documentation.cs";
         private const string MapResolver = "MapResolver.cs";
         private const string CustomAndUniversalResolvers = "CustomAndUniversalResolvers.cs";
+        private const string CommandsMap = "CommandsMap.cs";
 
         private const string ComponentsBluePrintsPath = "/Scripts/BluePrints/ComponentsBluePrints/";
         private const string SystemsBluePrintsPath = "/Scripts/BluePrints/SystemsBluePrint/";
@@ -75,6 +76,9 @@ namespace RoslynHECS
         public static bool CommandMapNeeded => commandMapneeded;
 
         private static HashSet<LinkedInterfaceNode> interfaceCache = new HashSet<LinkedInterfaceNode>(32);
+        private static List<FileInfo> files;
+
+        private static FileInfo alrdyHaveCommandMap;
 
         static async Task Main(string[] args)
         {
@@ -88,7 +92,7 @@ namespace RoslynHECS
             var test = Directory.GetDirectories(ScriptsPath);
 
             //var files = new DirectoryInfo(ScriptsPath).GetFiles("*.cs", SearchOption.AllDirectories);
-            var files = new DirectoryInfo(ScriptsPath).GetFiles("*.cs", SearchOption.AllDirectories).Where(x => !x.FullName.Contains("\\Plugins") && !x.FullName.Contains("\\HECSGenerated") && !x.FullName.Contains("\\MessagePack")).ToList();
+            files = new DirectoryInfo(ScriptsPath).GetFiles("*.cs", SearchOption.AllDirectories).Where(x => !x.FullName.Contains("\\Plugins") && !x.FullName.Contains("\\HECSGenerated") && !x.FullName.Contains("\\MessagePack")).ToList();
             Console.WriteLine(files.Count);
 
             var list = new List<SyntaxTree>(2048);
@@ -100,6 +104,9 @@ namespace RoslynHECS
                     var s = File.ReadAllText(f.FullName);
                     var syntaxTree = CSharpSyntaxTree.ParseText(s);
                     list.Add(syntaxTree);
+
+                    if (f.Name == CommandsMap)
+                        alrdyHaveCommandMap = f;
                 }
             }
 
@@ -207,9 +214,15 @@ namespace RoslynHECS
             if (commandMapneeded)
             {
                 var commandMap = processGeneration.GenerateNetworkCommandsAndShortIdsMap(networkCommands);
-                SaveToFile("CommandsMap.cs", commandMap, HECSGenerated);
 
-                typeof(ClassDeclarationSyntax).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | BindingFlags.FlattenHierarchy);
+                if (alrdyHaveCommandMap != null)
+                {
+                    SaveToFileToFullPath(commandMap, alrdyHaveCommandMap.FullName);
+                }
+                else
+                {
+                    SaveToFile(CommandsMap, commandMap, HECSGenerated);
+                }
             }
 
             if (bluePrintsNeeded)
@@ -263,6 +276,19 @@ namespace RoslynHECS
                 Console.WriteLine("we cant save file to " + pathToDirectory);
             }
         }
+
+        private static void SaveToFileToFullPath(string data, string fullPath)
+        {
+            try
+            {
+                File.WriteAllText(fullPath, data);
+            }
+            catch
+            {
+                Console.WriteLine("we cant save file to " + fullPath);
+            }
+        }
+
 
         private static void ProcessStructs(StructDeclarationSyntax s)
         {
