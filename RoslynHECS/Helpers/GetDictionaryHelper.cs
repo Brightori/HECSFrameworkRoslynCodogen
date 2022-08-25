@@ -11,7 +11,7 @@ namespace RoslynHECS.Helpers
             dictionaryBody = body;
 
             tree.Add(new TabSimpleSyntax(initialIndent,
-                $"public Dictionary<{key},{value}> {dictionaryName}()"));
+                $"private Dictionary<{key},{value}> {dictionaryName}()"));
 
             tree.Add(new LeftScopeSyntax(initialIndent));
             tree.Add(new TabSimpleSyntax(initialIndent+1, $"return new Dictionary<{key},{value}>"));
