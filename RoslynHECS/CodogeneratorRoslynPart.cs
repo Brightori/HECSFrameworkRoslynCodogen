@@ -2164,9 +2164,8 @@ namespace HECSFramework.Core.Generator
         }
 
         private ISyntax GetUniversalResolver(LinkedNode c, ISyntax usings)
-        {
-            var baselist = new HashSet<ClassDeclarationSyntax>(16);
-            c.GetAllParentsAndParts(baselist);
+        { 
+            c.GetAllParentsAndParts(c.Parts); 
 
             var tree = new TreeSyntaxNode();
             var fields = new TreeSyntaxNode();
@@ -2198,6 +2197,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(outFunc);
             tree.Add(new RightScopeSyntax(2));
             tree.Add(new RightScopeSyntax(1));
+            tree.Add(new ParagraphSyntax());
 
 
             c.Interfaces.Clear();
@@ -2210,7 +2210,7 @@ namespace HECSFramework.Core.Generator
             var typeFields = new List<GatheredField>(128);
             List<(string type, string name)> fieldsForConstructor = new List<(string type, string name)>();
 
-            foreach (var parts in baselist)
+            foreach (var parts in c.Parts)
             {
                 foreach (var m in parts.Members)
                 {
