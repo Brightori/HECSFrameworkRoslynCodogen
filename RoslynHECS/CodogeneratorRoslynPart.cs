@@ -2533,6 +2533,9 @@ namespace HECSFramework.Core.Generator
             //gather network components
             foreach (var c in Program.componentOverData.Values)
             {
+                if (c.IsAbstract)
+                    continue;
+
                 foreach (var i in c.Interfaces)
                 {
                     if (i.Name == INetworkComponent)
@@ -2590,6 +2593,9 @@ namespace HECSFramework.Core.Generator
 
             foreach (var c in Program.componentOverData.Values)
             {
+                if (c.IsAbstract)
+                    continue;
+
                 if (c.Interfaces.Any(x => x.Name == INetworkComponent))
                 {
                     componentProviders.Tree.Add(GetDictionaryHelper.DictionaryBodyRecord(4,
