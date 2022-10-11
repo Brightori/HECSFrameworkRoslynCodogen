@@ -991,6 +991,31 @@ namespace RoslynHECS
         }
     }
 
+    //we have members here
+    public sealed class LinkedNodeExtended : LinkedNode
+    {
+        public HashSet<AttributeSyntax> ClassAttributes = new HashSet<AttributeSyntax>();
+        public HashSet<MemberDeclarationSyntax>  MemberDeclarationSyntaxes = new HashSet<MemberDeclarationSyntax>();
+
+        public LinkedNodeExtended (LinkedNode linkedNode)
+        {
+            foreach (var p in linkedNode.GetParents())
+            {
+                ProcessClass(p.ClassDeclaration);
+            }
+
+            foreach (var p in linkedNode.Parts)
+            {
+                ProcessClass(p);
+            }
+        }
+
+        private void ProcessClass(ClassDeclarationSyntax classDeclarationSyntax)
+        {
+
+        }
+    }
+
     public class LinkedGenericInterfaceNode
     {
         public string Name;
