@@ -1145,8 +1145,7 @@ namespace HECSFramework.Core.Generator
 
         private ISyntax GetResolver(LinkedNode c)
         {
-            var neededClasses = c.Parts;
-            var baselist = neededClasses.Select(x => x.BaseList).ToList();
+            var extendedNode = new LinkedNodeExtended(c);
 
             var tree = new TreeSyntaxNode();
             var usings = new TreeSyntaxNode();
@@ -1357,7 +1356,6 @@ namespace HECSFramework.Core.Generator
                         data = data.Replace(")", "");
                         resolver = data;
                     }
-
 
                     return (true, intValue, resolver);
                 }
