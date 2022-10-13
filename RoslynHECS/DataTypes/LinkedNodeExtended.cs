@@ -12,13 +12,35 @@ namespace RoslynHECS.DataTypes
         public HashSet<AttributeSyntax> ClassAttributes = new HashSet<AttributeSyntax>();
         public HashSet<MemberNode> MemberDeclarationSyntaxes = new HashSet<MemberNode>();
 
+        public bool IsPrivateFieldIncluded { get; private set; }
+
         public LinkedNodeExtended(LinkedNode linkedNode)
         {
-            foreach (var p in linkedNode.GetParents())
-                ProcessClass(p.ClassDeclaration);
+            Name = linkedNode.Name;
+            ClassDeclaration = linkedNode.ClassDeclaration;
+            Parent = linkedNode;
+            IsAbstract = linkedNode.IsAbstract;
+            IsPartial = linkedNode.IsPartial;
+            IsGeneric = linkedNode.IsGeneric;
+
+            Parts = linkedNode.Parts;
+            Interfaces = linkedNode.Interfaces;
+
+            if (linkedNode.Parent != null)
+            {
+                foreach (var p in linkedNode.GetParents())
+                {
+                    if (p == null)
+                        continue;
+
+                    ProcessClass(p.ClassDeclaration);
+                }
+            }
 
             foreach (var p in linkedNode.Parts)
                 ProcessClass(p);
+
+            IsPrivateFieldIncluded = ClassAttributes.Any(x => x.Name.ToString() == "PrivateFieldsIncluded");
         }
 
         private void ProcessClass(ClassDeclarationSyntax classDeclarationSyntax)
@@ -29,7 +51,7 @@ namespace RoslynHECS.DataTypes
             {
                 if (m is PropertyDeclarationSyntax || m is FieldDeclarationSyntax)
                 {
-                    MemberDeclarationSyntaxes.Add(new MemberNode(classDeclarationSyntax));
+                    MemberDeclarationSyntaxes.Add(new MemberNode(m));
                 }
             }
         }
@@ -38,13 +60,13 @@ namespace RoslynHECS.DataTypes
     public class MemberNode
     {
         public MemberDeclarationSyntax MemberDeclarationSyntax;
-        public HashSet<AttributeSyntax> ClassAttributes = new HashSet<AttributeSyntax>();
-        public bool IsHaveAttributes => ClassAttributes.Count > 0;
+        public HashSet<AttributeSyntax> Attributes = new HashSet<AttributeSyntax>();
+        public bool IsHaveAttributes => Attributes.Count > 0;
 
-        public MemberNode (MemberDeclarationSyntax memberDeclarationSyntax)
+        public MemberNode(MemberDeclarationSyntax memberDeclarationSyntax)
         {
             MemberDeclarationSyntax = memberDeclarationSyntax;
-            ClassAttributes = memberDeclarationSyntax.AttributeLists.SelectMany(x => x.Attributes).ToHashSet();
+            Attributes = memberDeclarationSyntax.AttributeLists.SelectMany(x => x.Attributes).ToHashSet();
         }
 
         public override bool Equals(object obj)

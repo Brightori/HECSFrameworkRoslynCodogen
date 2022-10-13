@@ -33,7 +33,7 @@ namespace HECSFramework.Core.Generator
         public const string IReactComponentLocal = "IReactComponentLocal";
         public const string IReactComponentGlobal = "IReactComponentGlobal";
         public const string CurrentSystem = "currentSystem";
-        
+
         public const string IReactNetworkCommandGlobal = "IReactNetworkCommandGlobal";
         public const string IReactNetworkCommandLocal = "IReactNetworkCommandLocal";
 
@@ -1187,91 +1187,118 @@ namespace HECSFramework.Core.Generator
             tree.Add(new RightScopeSyntax(1));
             tree.Add(new RightScopeSyntax());
 
-            if (baselist.Any(x => x != null && x.ChildNodes().Any(z => z != null && z.ToString() == "IBeforeSerializationComponent")))
+            if (c.Interfaces.Any(x => x.Name == "IBeforeSerializationComponent"))
                 constructor.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.BeforeSync();"));
 
             var typeFields = new List<GatheredField>(128);
             List<(string type, string name)> fieldsForConstructor = new List<(string type, string name)>();
 
-            foreach (var allClasses in neededClasses)
+            if (extendedNode.IsPrivateFieldIncluded)
             {
-                foreach (var m in allClasses.Members)
+                usings.AddUnique(new UsingSyntax("HECSFramework.Core"));
+
+                tree.AddUnique(new ParagraphSyntax());
+                tree.Add(GetPartialClassForSerializePrivateFields(extendedNode.ClassDeclaration,
+                    name + Resolver, out var saveBody, out var loadBody));
+
+                foreach (var m in extendedNode.MemberDeclarationSyntaxes)
                 {
-                    if (m is FieldDeclarationSyntax field)
+                    var check = IsValidPrivateField(m);
+
+                    if (!string.IsNullOrEmpty(check.FieldName))
                     {
-                        var validate = IsValidField(field);
-                        var getCollectionNameSpace = GetNameSpaceForCollection(field);
+                        fields.Add(new TabSimpleSyntax(2, $"[Key({check.Order})]"));
 
-                        if (getCollectionNameSpace.isValid)
+                        if (!string.IsNullOrEmpty(check.ResolverName))
+                            fields.Add(new TabSimpleSyntax(2, $"public {check.ResolverName} {check.FieldName};"));
+                        else
+                            fields.Add(new TabSimpleSyntax(2, $"public {check.Type} {check.FieldName};"));
+
+                        saveBody.AddUnique(new TabSimpleSyntax(3, $"{Resolver.ToLower()}.{check.FieldName} = {check.FieldName};")); 
+                        loadBody.AddUnique(new TabSimpleSyntax(3, $"{check.FieldName} = {Resolver.ToLower()}.{check.FieldName};")); 
+                    }
+                }
+
+                constructor.Add(new TabSimpleSyntax(3, $"{extendedNode.Name.ToLower()}.Save(ref this);"));
+                outFunc.Add(new TabSimpleSyntax(3, $"{extendedNode.Name.ToLower()}.Load(ref this);"));
+            }
+
+            foreach (var m in extendedNode.MemberDeclarationSyntaxes)
+            {
+                if (m.MemberDeclarationSyntax is FieldDeclarationSyntax field)
+                {
+                    var validate = IsValidField(m);
+                    var getCollectionNameSpace = GetNameSpaceForCollection(field);
+
+                    if (getCollectionNameSpace.isValid)
+                    {
+                        foreach (var t in getCollectionNameSpace.nameSpace.Tree)
+                            AddUniqueSyntax(usings, t);
+                    }
+
+                    if (validate.valid)
+                    {
+                        var getNameSpace = GetNamespaces(field.Declaration.Type.ToString());
+                        var getListNameSpace = GetListNameSpace(field);
+
+                        if (getListNameSpace != string.Empty)
+                            AddUniqueSyntax(usings, new UsingSyntax(getListNameSpace));
+
+                        foreach (var n in getNameSpace.Tree)
+                            AddUniqueSyntax(usings, n);
+
+                        if (typeFields.Any(x => x.Order == validate.Order || x.FieldName == field.Declaration.Variables[0].Identifier.ToString()))
+                            continue;
+
+                        typeFields.Add(new GatheredField
                         {
-                            foreach (var t in getCollectionNameSpace.nameSpace.Tree)
-                                AddUniqueSyntax(usings, t);
-                        }
+                            Order = validate.Order,
+                            Type = field.Declaration.Type.ToString(),
+                            FieldName = field.Declaration.Variables[0].Identifier.ToString(),
+                            ResolverName = validate.resolver,
+                            Node = field
+                        });
+                    }
+                }
 
-                        if (validate.valid)
+                if (m.MemberDeclarationSyntax is PropertyDeclarationSyntax property)
+                {
+                    var validate = IsValidProperty(property);
+                    var getNameSpace = GetNameSpace(property);
+                    var getCollectionNameSpace = GetNameSpaceForCollection(property);
+
+                    if (getCollectionNameSpace.isValid)
+                    {
+                        AddUniqueSyntax(usings, new UsingSyntax(getCollectionNameSpace.nameSpace));
+                    }
+
+                    if (validate.valid)
+                    {
+                        if (typeFields.Any(x => x.Order == validate.Order))
+                            continue;
+
+                        if (getNameSpace != string.Empty)
+                            AddUniqueSyntax(usings, new UsingSyntax(getNameSpace));
+
+                        if (property.Type.ToString().Contains("ReactiveValue"))
                         {
-                            var getNameSpace = GetNamespaces(field.Declaration.Type.ToString());
-                            var getListNameSpace = GetListNameSpace(field);
-
-                            if (getListNameSpace != string.Empty)
-                                AddUniqueSyntax(usings, new UsingSyntax(getListNameSpace));
-
-                            foreach (var n in getNameSpace.Tree)
-                                AddUniqueSyntax(usings, n);
-
-                            if (typeFields.Any(x => x.Order == validate.Order || x.FieldName == field.Declaration.Variables[0].Identifier.ToString()))
-                                continue;
-
                             typeFields.Add(new GatheredField
                             {
                                 Order = validate.Order,
-                                Type = field.Declaration.Type.ToString(),
-                                FieldName = field.Declaration.Variables[0].Identifier.ToString(),
-                                ResolverName = validate.resolver,
-                                Node = field
+                                Type = property.Type.ToString().Replace("ReactiveValue", "").Replace("<", "").Replace(">", ""),
+                                FieldName = property.Identifier.ToString(),
+                                Node = property
                             });
                         }
-                    }
-
-                    if (m is PropertyDeclarationSyntax property)
-                    {
-                        var validate = IsValidProperty(property);
-                        var getNameSpace = GetNameSpace(property);
-                        var getCollectionNameSpace = GetNameSpaceForCollection(property);
-
-                        if (getCollectionNameSpace.isValid)
+                        else
                         {
-                            AddUniqueSyntax(usings, new UsingSyntax(getCollectionNameSpace.nameSpace));
-                        }
-
-                        if (validate.valid)
-                        {
-                            if (typeFields.Any(x => x.Order == validate.Order))
-                                continue;
-
-                            if (getNameSpace != string.Empty)
-                                AddUniqueSyntax(usings, new UsingSyntax(getNameSpace));
-
-                            if (property.Type.ToString().Contains("ReactiveValue"))
+                            typeFields.Add(new GatheredField
                             {
-                                typeFields.Add(new GatheredField
-                                {
-                                    Order = validate.Order,
-                                    Type = property.Type.ToString().Replace("ReactiveValue", "").Replace("<", "").Replace(">", ""),
-                                    FieldName = property.Identifier.ToString(),
-                                    Node = property
-                                });
-                            }
-                            else
-                            {
-                                typeFields.Add(new GatheredField
-                                {
-                                    Order = validate.Order,
-                                    Type = property.Type.ToString(),
-                                    FieldName = property.Identifier.ToString(),
-                                    Node = property
-                                });
-                            }
+                                Order = validate.Order,
+                                Type = property.Type.ToString(),
+                                FieldName = property.Identifier.ToString(),
+                                Node = property
+                            });
                         }
                     }
                 }
@@ -1312,7 +1339,7 @@ namespace HECSFramework.Core.Generator
                 }
             }
 
-            if (baselist.Any(x => x != null && x.ChildNodes().Any(z => z != null && z.ToString() == "IAfterSerializationComponent")))
+            if (c.Interfaces.Any(x => x.Name == "IAfterSerializationComponent"))
             {
                 outFunc.Add(new TabSimpleSyntax(3, $"{c.Name.ToLower()}.AfterSync();"));
             }
@@ -1322,6 +1349,94 @@ namespace HECSFramework.Core.Generator
 
             usings.Add(new ParagraphSyntax());
             return tree;
+        }
+
+        public GatheredField IsValidPrivateField(MemberNode memberNode)
+        {
+            if (memberNode.MemberDeclarationSyntax is PropertyDeclarationSyntax property)
+            {
+                if (property.AccessorList == null)
+                    return default;
+
+                var t = property.AccessorList.Accessors.FirstOrDefault(x => x.Keyword.Text == "set");
+
+                if (t == null || t.Modifiers.Any(x => x.IsKind(SyntaxKind.PublicKeyword)))
+                    return default;
+            }
+
+            foreach (var a in memberNode.Attributes)
+            {
+                if (a.Name.ToString() == ("Field") && memberNode.MemberDeclarationSyntax.Modifiers.ToString().Contains("private")
+                    || memberNode.MemberDeclarationSyntax.Modifiers.ToString().Contains("protected"))
+                {
+                    if (a.ArgumentList == null)
+                        continue;
+                    var resolver = string.Empty;
+
+                    var arguments = a.ArgumentList.Arguments.ToArray();
+                    var intValue = int.Parse(arguments[0].ToString());
+
+                    if (arguments.Length > 1)
+                    {
+                        var data = arguments[1].ToString();
+                        data = data.Replace("typeof(", "");
+                        data = data.Replace(")", "");
+                        resolver = data;
+                    }
+
+                    return new GatheredField
+                    {
+                        FieldName = SyntaxHelper.GetFieldName(memberNode.MemberDeclarationSyntax),
+                        Node = memberNode.MemberDeclarationSyntax,
+                        Order = intValue,
+                        ResolverName = resolver,
+                        Type = SyntaxHelper.GetType(memberNode.MemberDeclarationSyntax),
+                    };
+                }
+            }
+
+            return default;
+        }
+
+
+        public (bool valid, int Order, string resolver) IsValidField(MemberNode memberNode)
+        {
+            if (memberNode.MemberDeclarationSyntax is PropertyDeclarationSyntax property)
+            {
+                if (property.AccessorList == null)
+                    return (false, -1, string.Empty);
+
+                var t = property.AccessorList.Accessors.FirstOrDefault(x => x.Keyword.Text == "set");
+
+                if (t == null || t.Modifiers.Any(x => x.IsKind(SyntaxKind.PrivateKeyword) || x.IsKind(SyntaxKind.ProtectedKeyword)))
+                    return (false, -1, string.Empty);
+            }
+
+            foreach (var a in memberNode.Attributes)
+            {
+                //todo "разобраться аккуратно с аттрибутами поля"
+                if (a.Name.ToString() == ("Field") && memberNode.MemberDeclarationSyntax.Modifiers.ToString().Contains("public"))
+                {
+                    if (a.ArgumentList == null)
+                        continue;
+                    var resolver = string.Empty;
+
+                    var arguments = a.ArgumentList.Arguments.ToArray();
+                    var intValue = int.Parse(arguments[0].ToString());
+
+                    if (arguments.Length > 1)
+                    {
+                        var data = arguments[1].ToString();
+                        data = data.Replace("typeof(", "");
+                        data = data.Replace(")", "");
+                        resolver = data;
+                    }
+
+                    return (true, intValue, resolver);
+                }
+            }
+
+            return (false, -1, string.Empty);
         }
 
         public (bool valid, int Order, string resolver) IsValidField(MemberDeclarationSyntax fieldDeclarationSyntax)
@@ -1465,11 +1580,14 @@ namespace HECSFramework.Core.Generator
             }
         }
 
-        public ISyntax GetPartialClassForSerializePrivateFields(ClassDeclarationSyntax classDeclarationSyntax, string resolver,  out ISyntax saveBody, out ISyntax loadBody)
+        public ISyntax GetPartialClassForSerializePrivateFields(ClassDeclarationSyntax classDeclarationSyntax, string resolver, out ISyntax saveBody, out ISyntax loadBody)
         {
             var classSyntax = new TreeSyntaxNode();
 
-            classSyntax.Add(new TabSimpleSyntax(1, 
+            classSyntax.Add(new NameSpaceSyntax("Components"));
+            classSyntax.Add(new LeftScopeSyntax());
+
+            classSyntax.Add(new TabSimpleSyntax(1,
                 $"public partial class {classDeclarationSyntax.Identifier.ValueText} : " +
                 $"ISaveToResolver<{resolver}>, ILoadFromResolver<{resolver}>"));
 
@@ -1478,6 +1596,7 @@ namespace HECSFramework.Core.Generator
             classSyntax.Add(new ParagraphSyntax());
             classSyntax.Add(GetLoadResolverBody(resolver, out loadBody));
             classSyntax.Add(new RightScopeSyntax(1));
+            classSyntax.Add(new RightScopeSyntax());
             return classSyntax;
         }
 
@@ -1850,32 +1969,6 @@ namespace HECSFramework.Core.Generator
             return (false, -1);
         }
 
-        public struct GatheredField
-        {
-            public string Type;
-            public string FieldName;
-            public int Order;
-            public CSharpSyntaxNode Node;
-            public string ResolverName;
-
-            public override bool Equals(object obj)
-            {
-                return obj is GatheredField field &&
-                       Type == field.Type &&
-                       FieldName == field.FieldName &&
-                       Order == field.Order;
-            }
-
-            public override int GetHashCode()
-            {
-                int hashCode = -1156031304;
-                hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Type);
-                hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(FieldName);
-                hashCode = hashCode * -1521134295 + Order.GetHashCode();
-                return hashCode;
-            }
-        }
-
         private ISyntax GetOutToEntityVoidBodyRoslyn(ClassDeclarationSyntax c)
         {
             var tree = new TreeSyntaxNode();
@@ -2199,8 +2292,8 @@ namespace HECSFramework.Core.Generator
         }
 
         private ISyntax GetUniversalResolver(LinkedNode c, ISyntax usings)
-        { 
-            c.GetAllParentsAndParts(c.Parts); 
+        {
+            c.GetAllParentsAndParts(c.Parts);
 
             var tree = new TreeSyntaxNode();
             var fields = new TreeSyntaxNode();
@@ -2210,7 +2303,7 @@ namespace HECSFramework.Core.Generator
             var out2EntityFunc = new TreeSyntaxNode();
 
             var name = c.Name;
-            
+
             usings.AddUnique(new UsingSyntax("System"));
             usings.AddUnique(new UsingSyntax("Commands"));
             usings.AddUnique(new UsingSyntax("Components"));

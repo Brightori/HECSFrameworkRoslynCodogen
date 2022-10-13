@@ -505,6 +505,7 @@ namespace RoslynHECS
 
                 if (componentOverData[name].IsPartial)
                 {
+                    componentOverData[name].Parts.Add(componentOverData[name].ClassDeclaration);
                     var parts = classes.Where(x => x.Identifier.ValueText == name);
 
                     foreach (var part in parts)
@@ -528,6 +529,7 @@ namespace RoslynHECS
                 else
                 {
                     var baseList = component.BaseList?.Types;
+                    componentOverData[name].Parts.Add(componentOverData[name].ClassDeclaration);
 
                     if (baseList != null)
                     {
@@ -652,6 +654,7 @@ namespace RoslynHECS
 
                 if (componentOverData[name].IsPartial)
                 {
+                    componentOverData[name].Parts.Add(componentOverData[name].ClassDeclaration);
                     var parts = classes.Where(x => x.Identifier.ValueText == name);
 
                     foreach (var part in parts)
@@ -667,6 +670,7 @@ namespace RoslynHECS
                 }
                 else
                 {
+                    componentOverData[name].Parts.Add(componentOverData[name].ClassDeclaration);
                     var baseList = component.BaseList?.Types;
 
                     if (baseList != null)
@@ -861,11 +865,13 @@ namespace RoslynHECS
         {
             var currentNode = this;
 
-            while (Parent != null)
+            while (currentNode.Parent != null)
             {
                 currentNode = currentNode.Parent;
                 yield return currentNode;
             }
+                
+            yield break;
         }
 
         //containts parts includes itself
