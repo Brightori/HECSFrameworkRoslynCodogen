@@ -29,6 +29,7 @@ namespace RoslynHECS.Helpers
             return string.Empty;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void AddUnique(this ISyntax syntax, ISyntax add)
         {
             if (syntax.Tree.Any(x => x.ToString() == add.ToString()))

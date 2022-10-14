@@ -11,8 +11,10 @@ namespace RoslynHECS.DataTypes
     {
         public HashSet<AttributeSyntax> ClassAttributes = new HashSet<AttributeSyntax>();
         public HashSet<MemberNode> MemberDeclarationSyntaxes = new HashSet<MemberNode>();
+        public HashSet<AttributeSyntax> PartialSerializaion = new HashSet<AttributeSyntax>();
 
         public bool IsPrivateFieldIncluded { get; private set; }
+        public bool IsPartialSerialization => PartialSerializaion.Count > 0;
 
         public LinkedNodeExtended(LinkedNode linkedNode)
         {
@@ -41,6 +43,7 @@ namespace RoslynHECS.DataTypes
                 ProcessClass(p);
 
             IsPrivateFieldIncluded = ClassAttributes.Any(x => x.Name.ToString() == "PrivateFieldsIncluded");
+            PartialSerializaion = ClassAttributes.Where(x => x.Name.ToString() == "PrivateFieldsIncluded").ToHashSet();
         }
 
         private void ProcessClass(ClassDeclarationSyntax classDeclarationSyntax)
@@ -61,7 +64,10 @@ namespace RoslynHECS.DataTypes
     {
         public MemberDeclarationSyntax MemberDeclarationSyntax;
         public HashSet<AttributeSyntax> Attributes = new HashSet<AttributeSyntax>();
+        
         public bool IsHaveAttributes => Attributes.Count > 0;
+        public bool IsProperty => MemberDeclarationSyntax is PropertyDeclarationSyntax;
+        public bool IsField => MemberDeclarationSyntax is FieldDeclarationSyntax;
 
         public MemberNode(MemberDeclarationSyntax memberDeclarationSyntax)
         {
