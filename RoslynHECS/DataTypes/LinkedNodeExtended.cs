@@ -1,6 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
+using HECSFramework.Core.Generator;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using ClassDeclarationSyntax = Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax;
 
@@ -42,9 +43,25 @@ namespace RoslynHECS.DataTypes
             foreach (var p in linkedNode.Parts)
                 ProcessClass(p);
 
-            IsPrivateFieldIncluded = ClassAttributes.Any(x => x.Name.ToString() == "PrivateFieldsIncluded");
-            PartialSerializaion = ClassAttributes.Where(x => x.Name.ToString() == "PrivateFieldsIncluded").ToHashSet();
+            IsPrivateFieldIncluded = MemberDeclarationSyntaxes.Any(x => x.IsSerializable && !x.IsPublic());
+            PartialSerializaion = ClassAttributes.Where(x => x.Name.ToString() == "PartialSerializeField").ToHashSet();
         }
+
+        public IEnumerable<GatheredField> GetPartialSerializationFields()
+        {
+            foreach (var field in PartialSerializaion)
+            {
+                var arguments = field.ArgumentList.Arguments.ToArray();
+
+                if (arguments == null || arguments.Length == 0)
+                    continue;
+
+                var 
+
+                yield return new GatheredField()
+            }
+        }
+
 
         private void ProcessClass(ClassDeclarationSyntax classDeclarationSyntax)
         {
@@ -57,33 +74,6 @@ namespace RoslynHECS.DataTypes
                     MemberDeclarationSyntaxes.Add(new MemberNode(m));
                 }
             }
-        }
-    }
-
-    public class MemberNode
-    {
-        public MemberDeclarationSyntax MemberDeclarationSyntax;
-        public HashSet<AttributeSyntax> Attributes = new HashSet<AttributeSyntax>();
-        
-        public bool IsHaveAttributes => Attributes.Count > 0;
-        public bool IsProperty => MemberDeclarationSyntax is PropertyDeclarationSyntax;
-        public bool IsField => MemberDeclarationSyntax is FieldDeclarationSyntax;
-
-        public MemberNode(MemberDeclarationSyntax memberDeclarationSyntax)
-        {
-            MemberDeclarationSyntax = memberDeclarationSyntax;
-            Attributes = memberDeclarationSyntax.AttributeLists.SelectMany(x => x.Attributes).ToHashSet();
-        }
-
-        public override bool Equals(object obj)
-        {
-            return obj is MemberNode node &&
-                   EqualityComparer<MemberDeclarationSyntax>.Default.Equals(MemberDeclarationSyntax, node.MemberDeclarationSyntax);
-        }
-
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(MemberDeclarationSyntax);
         }
     }
 }
