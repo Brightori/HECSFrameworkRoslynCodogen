@@ -15,6 +15,9 @@ namespace HECSFramework.Core.Generator
         public int Order;
         public string ResolverName;
         public bool IsPrivate;
+        public bool IsSerializable;
+        public bool IsPartial;
+        public string Namespace;
 
         public GatheredField(MemberNode memberNode) : this()
         {
@@ -43,6 +46,8 @@ namespace HECSFramework.Core.Generator
                             ResolverName = data;
                         }
                     }
+
+                    IsSerializable = true;
                 }
             }
 

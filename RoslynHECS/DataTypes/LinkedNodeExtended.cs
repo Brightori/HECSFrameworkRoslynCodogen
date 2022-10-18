@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using HECSFramework.Core.Generator;
 using Microsoft.CodeAnalysis;
@@ -43,11 +44,18 @@ namespace RoslynHECS.DataTypes
             foreach (var p in linkedNode.Parts)
                 ProcessClass(p);
 
-            IsPrivateFieldIncluded = MemberDeclarationSyntaxes.Any(x => x.IsSerializable && !x.IsPublic());
             PartialSerializaion = ClassAttributes.Where(x => x.Name.ToString() == "PartialSerializeField").ToHashSet();
+
+            if (IsPartialSerialization)
+            {
+                ProcessPartialSerializationFields();
+            }
+
+            IsPrivateFieldIncluded = MemberDeclarationSyntaxes.Any(x => x.IsSerializable && x.GatheredField.IsPrivate);
         }
 
-        public IEnumerable<GatheredField> GetPartialSerializationFields()
+
+        private void ProcessPartialSerializationFields()
         {
             foreach (var field in PartialSerializaion)
             {
@@ -56,12 +64,30 @@ namespace RoslynHECS.DataTypes
                 if (arguments == null || arguments.Length == 0)
                     continue;
 
-                var 
+                var semanticModel = Program.Compilation.GetSemanticModel(field.SyntaxTree, true);
 
-                yield return new GatheredField()
+                var order = int.Parse(arguments[0].ToString());
+                var fieldName = arguments[1].ToString().Replace("\"","");
+                var resolvername = string.Empty;
+
+                if (arguments.Length == 3)
+                {
+                    
+                    resolvername = arguments[2].ToString().Replace("\"", ""); ;
+                }
+
+
+                var memberNode = MemberDeclarationSyntaxes.FirstOrDefault(x => x.GatheredField.FieldName == fieldName);
+
+                if (memberNode == null)
+                    continue;
+
+                memberNode.GatheredField.IsSerializable = true;
+                memberNode.GatheredField.IsPartial = true;
+                memberNode.GatheredField.Order = order;
+                memberNode.GatheredField.ResolverName = resolvername;
             }
         }
-
 
         private void ProcessClass(ClassDeclarationSyntax classDeclarationSyntax)
         {

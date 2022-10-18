@@ -79,6 +79,7 @@ namespace RoslynHECS
         private static List<FileInfo> files;
 
         private static FileInfo alrdyHaveCommandMap;
+        public static CSharpCompilation Compilation;
 
         static async Task Main(string[] args)
         {
@@ -109,6 +110,9 @@ namespace RoslynHECS
                         alrdyHaveCommandMap = f;
                 }
             }
+
+            Compilation = CSharpCompilation.Create("HelloWorld").AddSyntaxTrees(list);
+
 
             var classVisitor = new ClassVirtualizationVisitor();
             var structVisitor = new StructVirtualizationVisitor();
