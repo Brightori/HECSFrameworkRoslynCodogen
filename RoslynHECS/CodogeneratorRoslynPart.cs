@@ -1210,7 +1210,7 @@ namespace HECSFramework.Core.Generator
                         if (!string.IsNullOrEmpty(m.GatheredField.ResolverName))
                         {
                             fields.Add(new TabSimpleSyntax(2, $"public {m.GatheredField.ResolverName} {m.GatheredField.FieldName};"));
-                            saveBody.AddUnique(new TabSimpleSyntax(3, $"{Resolver.ToLower()}.{m.GatheredField.FieldName}.In(ref {m.GatheredField.FieldName});"));
+                            saveBody.AddUnique(new TabSimpleSyntax(3, $"{Resolver.ToLower()}.{m.GatheredField.FieldName} = new {m.GatheredField.ResolverName}().In(ref {m.GatheredField.FieldName});"));
                             loadBody.AddUnique(new TabSimpleSyntax(3, $"{Resolver.ToLower()}.{m.GatheredField.FieldName}.Out(ref {m.GatheredField.FieldName});"));
                         }
                         else
