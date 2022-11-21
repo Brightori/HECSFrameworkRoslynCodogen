@@ -163,6 +163,13 @@ namespace RoslynHECS
             foreach (var s in structs)
                 ProcessStructs(s);
 
+            foreach (var c in componentOverData.Values)
+            {
+                var newInterfaces = new HashSet<LinkedInterfaceNode>();
+                c.GetInterfaces(newInterfaces);
+                c.Interfaces = newInterfaces;
+            }
+
             Console.WriteLine("нашли компоненты " + componentOverData.Count);
             SaveFiles();
             Console.WriteLine("успешно сохранено");
@@ -928,7 +935,7 @@ namespace RoslynHECS
                 }
             }
 
-            foreach (var i in interfaces)
+            foreach (var i in interfaces.ToArray())
             {
                 i.GetInterfaces(interfaces);
             }
