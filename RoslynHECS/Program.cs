@@ -27,6 +27,7 @@ namespace RoslynHECS
         public static List<ClassDeclarationSyntax> allComponentsDeclarations = new List<ClassDeclarationSyntax>(2048);
         public static List<ClassDeclarationSyntax> partialDeclarations = new List<ClassDeclarationSyntax>(2048);
         public static List<StructDeclarationSyntax> globalCommands = new List<StructDeclarationSyntax>(2048);
+        public static List<StructDeclarationSyntax> fastComponents = new List<StructDeclarationSyntax>(2048);
         public static List<StructDeclarationSyntax> localCommands = new List<StructDeclarationSyntax>(2048);
         public static List<StructDeclarationSyntax> networkCommands = new List<StructDeclarationSyntax>(2048);
 
@@ -46,8 +47,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> structs;
         public static List<InterfaceDeclarationSyntax> interfaces;
 
-        public static string ScriptsPath = @"D:\UniverseClientCorp\Assets\";
-        public static string HECSGenerated = @"D:\UniverseClientCorp\Assets\Scripts\HECSGenerated\";
+        public static string ScriptsPath = @"D:\Develop\NavyFest\Assets\";
+        public static string HECSGenerated = @"D:\Develop\NavyFest\Assets\Scripts\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
@@ -71,7 +72,7 @@ namespace RoslynHECS
 
         private static bool resolversNeeded = true;
         private static bool bluePrintsNeeded = true;
-        private static bool commandMapneeded = true;
+        private static bool commandMapneeded = false;
 
         public static bool CommandMapNeeded => commandMapneeded;
 
@@ -212,14 +213,21 @@ namespace RoslynHECS
             if (resolversNeeded)
             {
                 var path = HECSGenerated + @"Resolvers\";
+                var fastProvidersPath = HECSGenerated + @"FastComponentsProviders\";
                 var resolvers = processGeneration.GetSerializationResolvers();
+                var fastComponents = processGeneration.GetProvidersForFastComponent();
                 SaveToFile(MapResolver, processGeneration.GetResolverMap(), HECSGenerated);
                 SaveToFile(CustomAndUniversalResolvers, processGeneration.GetCustomResolversMap(), HECSGenerated);
+                SaveToFile("FastWorldPart.cs", processGeneration.GetFastWorldPart(), HECSGenerated);
+                SaveToFile("HECSComponentToFastComponent.cs", processGeneration.GetHECSComponentToFastComponent(), HECSGenerated);
 
                 CleanDirectory(path);
 
                 foreach (var c in resolvers)
                     SaveToFile(c.name, c.content, path);
+
+                foreach (var c in fastComponents)
+                    SaveToFile(c.fileName, c.data, fastProvidersPath);
             }
 
             if (commandMapneeded)
@@ -311,6 +319,11 @@ namespace RoslynHECS
                 globalCommands.AddOrRemoveElement(s, true);
                 localCommands.AddOrRemoveElement(s, true);
                 Console.WriteLine("нашли глобальную команду " + structCurrent);
+            }
+
+            if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains("IFastComponent")))
+            {
+                fastComponents.AddOrRemoveElement(s, true);
             }
 
             if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains(typeof(ICommand).Name)))
