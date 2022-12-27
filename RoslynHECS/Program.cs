@@ -47,8 +47,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> structs;
         public static List<InterfaceDeclarationSyntax> interfaces;
 
-        public static string ScriptsPath = @"D:\Develop\NavyFest\Assets\";
-        public static string HECSGenerated = @"D:\Develop\NavyFest\Assets\Scripts\HECSGenerated\";
+        public static string ScriptsPath = @"D:\Develop\ZombieWar\Assets\";
+        public static string HECSGenerated = @"D:\Develop\ZombieWar\Assets\Scripts\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
@@ -1053,6 +1053,9 @@ namespace RoslynHECS
 
         public void GetInterfaces(HashSet<LinkedInterfaceNode> interfaces)
         {
+            if (interfaces.Contains(this))
+                return;
+
             interfaces.Add(this);
 
             foreach (var p in Parents)
