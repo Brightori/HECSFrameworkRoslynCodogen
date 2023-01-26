@@ -47,8 +47,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> structs;
         public static List<InterfaceDeclarationSyntax> interfaces;
 
-        public static string ScriptsPath = @"D:\Develop\ZombieWar\Assets\";
-        public static string HECSGenerated = @"D:\Develop\ZombieWar\Assets\Scripts\HECSGenerated\";
+        public static string ScriptsPath = @"D:\HECSTest\Assets\";
+        public static string HECSGenerated = @"D:\HECSTest\Assets\Scripts\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
@@ -206,7 +206,7 @@ namespace RoslynHECS
             SaveToFile(TypeProvider, processGeneration.GenerateTypesMapRoslyn(), HECSGenerated);
             //SaveToFile(MaskProvider, processGeneration.GenerateMaskProviderRoslyn(), HECSGenerated);
             SaveToFile(SystemBindings, processGeneration.GetSystemBindsByRoslyn(), HECSGenerated);
-            SaveToFile(ComponentContext, processGeneration.GetComponentContextRoslyn(), HECSGenerated);
+            //SaveToFile(ComponentContext, processGeneration.GetComponentContextRoslyn(), HECSGenerated);
             SaveToFile(HecsMasks, processGeneration.GenerateHecsMasksRoslyn(), HECSGenerated);
             //SaveToFile(Documentation, processGeneration.GetDocumentationRoslyn(), HECSGenerated); не получается нормально автоматизировать, слишком сложные параметры у атрибута
 
@@ -219,7 +219,6 @@ namespace RoslynHECS
                 SaveToFile(MapResolver, processGeneration.GetResolverMap(), HECSGenerated);
                 SaveToFile(CustomAndUniversalResolvers, processGeneration.GetCustomResolversMap(), HECSGenerated);
                 SaveToFile("FastWorldPart.cs", processGeneration.GetFastWorldPart(), HECSGenerated);
-                SaveToFile("HECSComponentToFastComponent.cs", processGeneration.GetHECSComponentToFastComponent(), HECSGenerated);
 
                 CleanDirectory(path);
 

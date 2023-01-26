@@ -203,7 +203,7 @@ namespace HECSFramework.Core.Generator
             var fieldBindName = fieldName + "FieldBinding";
 
             fields.Tree.Add(new TabSimpleSyntax(2, $"private FieldInfo {fieldBindName} = typeof({system}).GetField({CParse.Quote}{fieldName}{CParse.Quote}, BindingFlags.Instance | BindingFlags.NonPublic);"));
-            binder.Tree.Add(new TabSimpleSyntax(3, $"{fieldBindName}.SetValue({CurrentSystem}, {CurrentSystem}.Owner.GetOrAddComponent<{fieldType}>(HMasks.{fieldType}));"));
+            binder.Tree.Add(new TabSimpleSyntax(3, $"{fieldBindName}.SetValue({CurrentSystem}, {CurrentSystem}.Owner.GetOrAddComponent<{fieldType}>());"));
             unbinder.Tree.Add(new TabSimpleSyntax(3, $"{fieldBindName}.SetValue(system, null);"));
         }
 
@@ -212,7 +212,7 @@ namespace HECSFramework.Core.Generator
             var fieldType = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax && x.ToString() != "Required").ToString();
             var fieldName = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is VariableDeclaratorSyntax).ToString();
 
-            binder.Tree.Add(new TabSimpleSyntax(3, $"{CurrentSystem}.{fieldName} = {CurrentSystem}.Owner.GetOrAddComponent<{fieldType}>(HMasks.{fieldType});"));
+            binder.Tree.Add(new TabSimpleSyntax(3, $"{CurrentSystem}.{fieldName} = {CurrentSystem}.Owner.GetOrAddComponent<{fieldType}>();"));
             unbinder.Tree.Add(new TabSimpleSyntax(3, $"{CurrentSystem}.{fieldName} = null;"));
         }
 
@@ -265,7 +265,6 @@ namespace HECSFramework.Core.Generator
 
             tree.Add(new NameSpaceSyntax(DefaultNameSpace));
             tree.Add(new LeftScopeSyntax());
-            tree.Add(GetAdditionalTypesMap());
             tree.Add(new CompositeSyntax(new TabSpaceSyntax(1), new SimpleSyntax($"public partial class {typeof(TypesProvider).Name}"), new ParagraphSyntax()));
             tree.Add(new LeftScopeSyntax(1));
             tree.Add(new TabSimpleSyntax(2, "public TypesProvider()"));
@@ -515,81 +514,6 @@ namespace HECSFramework.Core.Generator
             t[intPart] = fractPart;
 
             return t.ToArray();
-        }
-        #endregion
-
-        #region GenerateTypesMapComponentContext
-
-        /// <summary>
-        /// тут мы добавляем часть тайп мапы, которая отвечает за контейнеры компонентов
-        /// </summary>
-        /// <returns></returns>
-        private ISyntax GetAdditionalTypesMap()
-        {
-            var overTree = new TreeSyntaxNode();
-            overTree.Add(GetContextContainers());
-            overTree.Add(new ParagraphSyntax());
-            overTree.Add(new TabSimpleSyntax(0, "public static partial class TypesMap"));
-            overTree.Add(new LeftScopeSyntax());
-            overTree.Add(GetTypesMapContext());
-            overTree.Add(new RightScopeSyntax());
-
-            return overTree;
-        }
-
-        private ISyntax GetContextContainers()
-        {
-            var tree = new TreeSyntaxNode();
-
-            for (int i = 0; i < Program.componentsDeclarations.Count; i++)
-            {
-                var component = Program.componentsDeclarations[i];
-                tree.Add(new TabSimpleSyntax(1, $"public sealed class {component.Identifier.ValueText}{ContextSetter} : IComponentContextSetter "));
-                tree.Add(new LeftScopeSyntax(1));
-                tree.Add(new TabSimpleSyntax(2, "public void SetComponent(IEntity entity, IComponent component)"));
-                tree.Add(new LeftScopeSyntax(2));
-                tree.Add(new TabSimpleSyntax(3, $"entity.ComponentContext.Get{component.Identifier.ValueText} = ({component.Identifier.ValueText})component;"));
-                tree.Add(new RightScopeSyntax(2));
-                tree.Add(new TabSimpleSyntax(2, "public void RemoveComponent(IEntity entity, IComponent component)"));
-                tree.Add(new LeftScopeSyntax(2));
-                tree.Add(new TabSimpleSyntax(3, $"entity.ComponentContext.Get{component.Identifier.ValueText} = null;"));
-                tree.Add(new RightScopeSyntax(2));
-                tree.Add(new TabSimpleSyntax(2, "public void RegisterComponent(IEntity entity, bool isAdded)"));
-                tree.Add(new LeftScopeSyntax(2));
-                tree.Add(new TabSimpleSyntax(3, $"entity.World.GlobalComponentListenerService.Invoke(entity.Get{component.Identifier.ValueText}(), isAdded);"));
-                tree.Add(new TabSimpleSyntax(3, $"entity.RegisterComponentListenersService.Invoke(entity.Get{component.Identifier.ValueText}(), isAdded);"));
-                tree.Add(new RightScopeSyntax(2));
-                tree.Add(new RightScopeSyntax(1));
-
-                if (i < Program.componentsDeclarations.Count - 1)
-                    tree.Add(new ParagraphSyntax());
-            }
-
-            return tree;
-        }
-
-        private ISyntax GetTypesMapContext()
-        {
-            var tree = new TreeSyntaxNode();
-            var dictionaryBody = new TreeSyntaxNode();
-
-            tree.Add(new TabSimpleSyntax(1, "static partial void SetComponentsSetters()"));
-            tree.Add(new LeftScopeSyntax(1));
-            tree.Add(new TabSimpleSyntax(2, "componentsSetters = new Dictionary<int, IComponentContextSetter>(256)"));
-            tree.Add(new LeftScopeSyntax(2));
-            tree.Add(dictionaryBody);
-            tree.Add(new RightScopeSyntax(2, true));
-            tree.Add(new RightScopeSyntax(1));
-
-            var count = Program.componentsDeclarations.Count;
-
-            for (int i = 0; i < count; i++)
-            {
-                var component = Program.componentsDeclarations[i];
-                dictionaryBody.Add(new TabSimpleSyntax(3, $"{CParse.LeftScope}{i + 1}, new {component.Identifier.ValueText}{ContextSetter}(){CParse.RightScope},"));
-            }
-
-            return tree;
         }
         #endregion
 
@@ -1167,7 +1091,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
             tree.Add(new LeftScopeSyntax());
             tree.Add(new TabSimpleSyntax(1, "[MessagePackObject, Serializable]"));
-            tree.Add(new TabSimpleSyntax(1, $"public struct {name + Resolver} : IResolver<{name}>, IResolver<{name + Resolver},{name}>, IData"));
+            tree.Add(new TabSimpleSyntax(1, $"public partial struct {name + Resolver} : IResolver<{name}>, IResolver<{name + Resolver},{name}>, IData"));
             tree.Add(new LeftScopeSyntax(1));
             tree.Add(fields);
             tree.Add(new ParagraphSyntax());
@@ -1175,7 +1099,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(new LeftScopeSyntax(2));
             tree.Add(constructor);
             tree.Add(new RightScopeSyntax(2));
-            tree.Add(new TabSimpleSyntax(2, $"public void Out(ref {typeof(IEntity).Name} entity)"));
+            tree.Add(new TabSimpleSyntax(2, $"public void Out(ref {typeof(Entity).Name} entity)"));
             tree.Add(new LeftScopeSyntax(2));
             tree.Add(GetOutToEntityVoidBodyRoslyn(c.ClassDeclaration));
             tree.Add(new RightScopeSyntax(2));
@@ -1838,7 +1762,7 @@ namespace HECSFramework.Core.Generator
         private ISyntax GetOutToEntityVoidBodyRoslyn(ClassDeclarationSyntax c)
         {
             var tree = new TreeSyntaxNode();
-            tree.Add(new TabSimpleSyntax(3, $"var local = entity.Get{c.Identifier.ValueText}();"));
+            tree.Add(new TabSimpleSyntax(3, $"var local = entity.GetComponent<{c.Identifier.ValueText}>();"));
             tree.Add(new TabSimpleSyntax(3, $"Out(ref local);"));
             return tree;
         }
@@ -1958,7 +1882,7 @@ namespace HECSFramework.Core.Generator
             var caseBody = new TreeSyntaxNode();
 
             tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(2, "private void ProcessResolverContainerRealisation(ref ResolverDataContainer dataContainerForResolving, ref IEntity entity)"));
+            tree.Add(new TabSimpleSyntax(2, "private void ProcessResolverContainerRealisation(ref ResolverDataContainer dataContainerForResolving, ref Entity entity)"));
             tree.Add(new LeftScopeSyntax(2));
             tree.Add(new TabSimpleSyntax(3, "switch (dataContainerForResolving.TypeHashCode)"));
             tree.Add(new LeftScopeSyntax(3));
@@ -1971,7 +1895,7 @@ namespace HECSFramework.Core.Generator
                 var name = container.Identifier.ValueText;
                 caseBody.Add(new TabSimpleSyntax(4, $"case {IndexGenerator.GetIndexForType(name)}:"));
                 caseBody.Add(new TabSimpleSyntax(5, $"var {name}{Resolver.ToLower()} = MessagePackSerializer.Deserialize<{name}{Resolver}>(dataContainerForResolving.Data);"));
-                caseBody.Add(new TabSimpleSyntax(5, $"var {name}component = ({name})entity.Get{name}();"));
+                caseBody.Add(new TabSimpleSyntax(5, $"var {name}component = entity.GetOrAddComponent<{name}>();"));
                 caseBody.Add(new TabSimpleSyntax(5, $"{name}{Resolver.ToLower()}.Out(ref {name}component);"));
                 caseBody.Add(new TabSimpleSyntax(5, $"break;"));
             }
@@ -2028,7 +1952,7 @@ namespace HECSFramework.Core.Generator
                 caseBody.Add(new TabSimpleSyntax(5, $"var {name}{Resolver.ToLower()} = MessagePackSerializer.Deserialize<{name}{Resolver}>(dataContainerForResolving.Data);"));
                 caseBody.Add(new TabSimpleSyntax(5, $"if (EntityManager.TryGetEntityByID(dataContainerForResolving.EntityGuid, out var entityOf{name}))"));
                 caseBody.Add(new LeftScopeSyntax(5));
-                caseBody.Add(new TabSimpleSyntax(6, $"var {name}component = ({name})entityOf{name}.Get{name}();"));
+                caseBody.Add(new TabSimpleSyntax(6, $"var {name}component = entityOf{name}.GetOrAddComponent<{name}>();"));
                 caseBody.Add(new TabSimpleSyntax(6, $"{name}{Resolver.ToLower()}.Out(ref {name}component);"));
                 caseBody.Add(new RightScopeSyntax(5));
                 caseBody.Add(new TabSimpleSyntax(5, $"break;"));
@@ -2177,7 +2101,7 @@ namespace HECSFramework.Core.Generator
             usings.AddUnique(new UsingSyntax("HECSFramework.Serialize"));
 
             tree.Add(new TabSimpleSyntax(1, "[MessagePackObject, Serializable]"));
-            tree.Add(new TabSimpleSyntax(1, $"public struct {name + Resolver} : IResolver<{name + Resolver},{name}>, IData"));
+            tree.Add(new TabSimpleSyntax(1, $"public partial struct {name + Resolver} : IResolver<{name + Resolver},{name}>, IData"));
             tree.Add(new LeftScopeSyntax(1));
             tree.Add(fields);
             tree.Add(new ParagraphSyntax());
