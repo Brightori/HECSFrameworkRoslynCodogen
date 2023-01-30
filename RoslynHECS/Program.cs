@@ -47,8 +47,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> structs;
         public static List<InterfaceDeclarationSyntax> interfaces;
 
-        public static string ScriptsPath = @"D:\HECSTest\Assets\";
-        public static string HECSGenerated = @"D:\HECSTest\Assets\Scripts\HECSGenerated\";
+        public static string ScriptsPath = @"D:\Develop\ZombieWar\Assets\";
+        public static string HECSGenerated = @"D:\Develop\ZombieWar\Assets\Scripts\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
@@ -209,6 +209,8 @@ namespace RoslynHECS
             //SaveToFile(ComponentContext, processGeneration.GetComponentContextRoslyn(), HECSGenerated);
             SaveToFile(HecsMasks, processGeneration.GenerateHecsMasksRoslyn(), HECSGenerated);
             //SaveToFile(Documentation, processGeneration.GetDocumentationRoslyn(), HECSGenerated); не получается нормально автоматизировать, слишком сложные параметры у атрибута
+
+            SaveToFile("ComponentsWorldPart.cs", processGeneration.GetEntitiesWorldPart(), HECSGenerated);
 
             if (resolversNeeded)
             {
