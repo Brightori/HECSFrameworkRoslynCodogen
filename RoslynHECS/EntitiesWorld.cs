@@ -26,12 +26,20 @@ namespace HECSFramework.Core.Generator
             var tree = new TreeSyntaxNode();
             var body = new TreeSyntaxNode();
 
-            tree.Add(new TabSimpleSyntax(2, "partial void FillStandartComponentRegistrators()"));
+            tree.Add(new TabSimpleSyntax(2, "partial void FillRegistrators()"));
             tree.Add(new LeftScopeSyntax(2));
+            
+            
             tree.Add(new TabSimpleSyntax(3, "componentProviderRegistrators = new ComponentProviderRegistrator[]"));
             tree.Add(new LeftScopeSyntax(3));
             tree.Add(body);
             tree.Add(new RightScopeSyntax(3, true));
+            
+            //tree.Add(new ParagraphSyntax());
+            //tree.Add(RegisterGlobalCommands());
+            //tree.Add(new ParagraphSyntax());
+            //tree.Add(RegisterLocalCommands());
+
             tree.Add(new RightScopeSyntax(2));
 
 
@@ -45,7 +53,29 @@ namespace HECSFramework.Core.Generator
 
             return tree;
         }
-    }
 
-   
+        private ISyntax RegisterGlobalCommands()
+        {
+            var tree = new TreeSyntaxNode();
+
+            foreach (var c in Program.globalCommands)
+            {
+                tree.Add(new TabSimpleSyntax(3, $"GlobalCommandListener<{c.Identifier.ValueText}>.ListenersToWorld.AddToIndex(new GlobalCommandListener<{c.Identifier.ValueText}>(), Index);"));
+            }
+
+            return tree;
+        }
+
+        private ISyntax RegisterLocalCommands()
+        {
+            var tree = new TreeSyntaxNode();
+
+            foreach (var c in Program.localCommands)
+            {
+                tree.Add(new TabSimpleSyntax(3, $"LocalCommandListener<{c.Identifier.ValueText}>.ListenersToWorld.AddToIndex(new LocalCommandListener<{c.Identifier.ValueText}>(), Index);"));
+            }
+
+            return tree;
+        }
+    }
 }

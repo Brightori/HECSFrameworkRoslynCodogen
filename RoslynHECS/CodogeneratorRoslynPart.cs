@@ -161,12 +161,12 @@ namespace HECSFramework.Core.Generator
             switch (part.BaseInterface.Name)
             {
                 case IReactCommand:
-                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"LocalCommandListener<{part.GenericType}>.ListenersToWorld.Data[system.Owner.World.Index].AddListener({CurrentSystem});"));
+                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"LocalCommandListener<{part.GenericType}>.AddListener(currentSystem.Owner.World.Index,{CurrentSystem});"));
                     unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"LocalCommandListener<{part.GenericType}>.ListenersToWorld.Data[system.Owner.World.Index].RemoveReactListener({CurrentSystem});"));
                     break;
                 case IReactGlobalCommand:
                     bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactCommand<{part.GenericType}>(system, {CurrentSystem});"));
-                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactCommand<{part.GenericType}>(system);"));
+                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactCommand<{part.GenericType}>({CurrentSystem});"));
                     break;
                 case IReactComponentLocal:
                     bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddLocalReactComponent<{part.GenericType}>(system.Owner.Index, {CurrentSystem}, true);"));
