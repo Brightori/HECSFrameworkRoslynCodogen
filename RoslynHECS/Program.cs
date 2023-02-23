@@ -72,7 +72,7 @@ namespace RoslynHECS
 
         private static bool resolversNeeded = true;
         private static bool bluePrintsNeeded = true;
-        private static bool commandMapneeded = false;
+        private static bool commandMapneeded = true;
 
         public static bool CommandMapNeeded => commandMapneeded;
 

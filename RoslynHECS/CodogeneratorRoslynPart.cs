@@ -191,13 +191,13 @@ namespace HECSFramework.Core.Generator
                 switch (part.BaseInterface.Name)
                 {
                     case IReactNetworkCommandGlobal:
-                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.NetworkCommandService.AddListener<{part.GenericType}>(system, {CurrentSystem});"));
-                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.NetworkCommandService.RemoveListener<{part.GenericType}>(system);"));
+                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"GlobalNetworkCommandListener<{part.GenericType}>.AddListener(system.Owner.World.Index, currentSystem);"));
+                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"GlobalNetworkCommandListener<{part.GenericType}>.RemoveListener(system.Owner.World.Index, currentSystem);"));
                         break;
 
                     case IReactNetworkCommandLocal:
-                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.LocalNetworkCommandService.AddListener<{part.GenericType}>(system, {CurrentSystem});"));
-                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.LocalNetworkCommandService.RemoveListener<{part.GenericType}>(system);"));
+                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"LocalNetworkCommandListener<{part.GenericType}>.AddListener(currentSystem.Owner.World.Index, currentSystem);"));
+                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"LocalNetworkCommandListener<{part.GenericType}>.RemoveListener(currentSystem.Owner.World.Index, currentSystem);"));
                         break;
                 }
             }
