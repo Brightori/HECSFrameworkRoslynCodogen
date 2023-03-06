@@ -47,8 +47,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> structs;
         public static List<InterfaceDeclarationSyntax> interfaces;
 
-        public static string ScriptsPath = @"D:\UniverseClientCorp\Assets\";
-        public static string HECSGenerated = @"D:\UniverseClientCorp\Assets\Scripts\HECSGenerated\";
+        public static string ScriptsPath = @"D:\Develop\Shootervertical\Assets\";
+        public static string HECSGenerated = @"D:\Develop\Shootervertical\Assets\Scripts\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
@@ -65,6 +65,7 @@ namespace RoslynHECS
 
         private const string ComponentsBluePrintsPath = "/Scripts/BluePrints/ComponentsBluePrints/";
         private const string SystemsBluePrintsPath = "/Scripts/BluePrints/SystemsBluePrint/";
+        private const string PredicatesBlueprints = "/Scripts/BluePrints/PredicatesBlueprints/";
 
         private const string BaseComponent = "BaseComponent";
         private const string HECSManualResolver = "HECSManualResolver";
@@ -72,7 +73,7 @@ namespace RoslynHECS
 
         private static bool resolversNeeded = true;
         private static bool bluePrintsNeeded = true;
-        private static bool commandMapneeded = true;
+        private static bool commandMapneeded = false;
 
         public static bool CommandMapNeeded => commandMapneeded;
 
@@ -249,6 +250,7 @@ namespace RoslynHECS
             {
                 var componetsBPFiles = processGeneration.GenerateComponentsBluePrints();
                 var systemsBPFiles = processGeneration.GenerateSystemsBluePrints();
+                var predicatesBPs = processGeneration.GetPredicateBluePrints();
 
                 //CleanDirectory(ScriptsPath + ComponentsBluePrintsPath);
                 //CleanDirectory(ScriptsPath + SystemsBluePrintsPath);
@@ -258,6 +260,9 @@ namespace RoslynHECS
 
                 foreach (var c in systemsBPFiles)
                     SaveToFile(c.name, c.classBody, ScriptsPath + SystemsBluePrintsPath);
+
+                foreach (var c in predicatesBPs)
+                    SaveToFile(c.Item1, c.Item2, ScriptsPath + PredicatesBlueprints);
 
                 SaveToFile(BluePrintsProvider, processGeneration.GetBluePrintsProvider(), HECSGenerated, needToImport: true);
             }

@@ -2392,6 +2392,46 @@ namespace HECSFramework.Core.Generator
 
         #endregion
 
+        #region PredicatesBluePrints
+
+        public List<(string, string)> GetPredicateBluePrints()
+        {
+            var newList = new List<(string, string)>(2048);
+
+            var count = Program.classes.Count;
+            var classes = Program.classes;
+
+            for (int i = 0; i < count; i++)
+            {
+                var currentClass = classes[i];
+                 
+                if (currentClass.BaseList != null && currentClass.BaseList.Types.Any(x => x.ToString()==("IPredicate")))
+                {
+                    newList.Add(($"{currentClass.Identifier.ValueText}Blueprint.cs", GetPredicateBluePrintSyntax(currentClass).ToString()));
+                }
+            }
+
+            return newList;
+        }
+
+        private ISyntax GetPredicateBluePrintSyntax(ClassDeclarationSyntax classDeclarationSyntax)
+        {
+            var tree = new TreeSyntaxNode();
+            tree.Add(new UsingSyntax("System"));
+            tree.Add(new UsingSyntax("HECSFramework.Core"));
+            tree.Add(new UsingSyntax("HECSFramework.Unity"));
+            tree.Add(new UsingSyntax("Predicates"));
+            tree.Add(new UsingSyntax("UnityEngine", 1));
+
+            tree.Add(new TabSimpleSyntax(0, $"[CreateAssetMenu(fileName = {CParse.Quote}{classDeclarationSyntax.Identifier.ValueText}{CParse.Quote}, menuName = {CParse.Quote}BluePrints/Predicates/{classDeclarationSyntax.Identifier.ValueText}{CParse.Quote})]"));
+            tree.Add(new TabSimpleSyntax(0, $"public class {classDeclarationSyntax.Identifier.ValueText}Blueprint : PredicateBluePrintContainer<{classDeclarationSyntax.Identifier}>"));
+            tree.Add(new LeftScopeSyntax());
+            tree.Add(new RightScopeSyntax());
+            return tree;
+        }
+
+        #endregion
+
         #region CommandsResolvers
 
         /// <summary>
