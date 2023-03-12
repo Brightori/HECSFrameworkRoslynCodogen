@@ -2432,6 +2432,43 @@ namespace HECSFramework.Core.Generator
 
         #endregion
 
+        #region ActionPredicates
+        public List<(string, string)> GetActionsBluePrints()
+        {
+            var newList = new List<(string, string)>(2048);
+
+            var count = Program.classes.Count;
+            var classes = Program.classes;
+
+            for (int i = 0; i < count; i++)
+            {
+                var currentClass = classes[i];
+
+                if (currentClass.BaseList != null && currentClass.BaseList.Types.Any(x => x.ToString() == ("IAction")))
+                {
+                    newList.Add(($"{currentClass.Identifier.ValueText}Blueprint.cs", GetActionsBluePrintSyntax(currentClass).ToString()));
+                }
+            }
+
+            return newList;
+        }
+
+        private ISyntax GetActionsBluePrintSyntax(ClassDeclarationSyntax classDeclarationSyntax)
+        {
+            var tree = new TreeSyntaxNode();
+            tree.Add(new UsingSyntax("System"));
+            tree.Add(new UsingSyntax("HECSFramework.Core"));
+            tree.Add(new UsingSyntax("HECSFramework.Unity"));
+            tree.Add(new UsingSyntax("UnityEngine", 1));
+
+            tree.Add(new TabSimpleSyntax(0, $"[CreateAssetMenu(fileName = {CParse.Quote}{classDeclarationSyntax.Identifier.ValueText}{CParse.Quote}, menuName = {CParse.Quote}BluePrints/Actions/{classDeclarationSyntax.Identifier.ValueText}{CParse.Quote})]"));
+            tree.Add(new TabSimpleSyntax(0, $"public class {classDeclarationSyntax.Identifier.ValueText}Blueprint : ActionBluePrint<{classDeclarationSyntax.Identifier}>"));
+            tree.Add(new LeftScopeSyntax());
+            tree.Add(new RightScopeSyntax());
+            return tree;
+        }
+        #endregion
+
         #region CommandsResolvers
 
         /// <summary>
