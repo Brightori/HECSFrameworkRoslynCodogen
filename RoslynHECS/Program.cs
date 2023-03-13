@@ -66,6 +66,7 @@ namespace RoslynHECS
         private const string ComponentsBluePrintsPath = "/Scripts/BluePrints/ComponentsBluePrints/";
         private const string SystemsBluePrintsPath = "/Scripts/BluePrints/SystemsBluePrint/";
         private const string PredicatesBlueprints = "/Scripts/BluePrints/PredicatesBlueprints/";
+        private const string ActionsBlueprints = "/Scripts/BluePrints/Actions/";
 
         private const string BaseComponent = "BaseComponent";
         private const string HECSManualResolver = "HECSManualResolver";
@@ -251,6 +252,7 @@ namespace RoslynHECS
                 var componetsBPFiles = processGeneration.GenerateComponentsBluePrints();
                 var systemsBPFiles = processGeneration.GenerateSystemsBluePrints();
                 var predicatesBPs = processGeneration.GetPredicateBluePrints();
+                var actionsBPs = processGeneration.GetActionsBluePrints();
 
                 //CleanDirectory(ScriptsPath + ComponentsBluePrintsPath);
                 //CleanDirectory(ScriptsPath + SystemsBluePrintsPath);
@@ -263,6 +265,9 @@ namespace RoslynHECS
 
                 foreach (var c in predicatesBPs)
                     SaveToFile(c.Item1, c.Item2, ScriptsPath + PredicatesBlueprints);
+                
+                foreach (var c in actionsBPs)
+                    SaveToFile(c.Item1, c.Item2, ScriptsPath + ActionsBlueprints);
 
                 SaveToFile(BluePrintsProvider, processGeneration.GetBluePrintsProvider(), HECSGenerated, needToImport: true);
             }
