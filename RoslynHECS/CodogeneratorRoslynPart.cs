@@ -2404,7 +2404,10 @@ namespace HECSFramework.Core.Generator
             for (int i = 0; i < count; i++)
             {
                 var currentClass = classes[i];
-                 
+
+                if (currentClass.Modifiers.Any(x => x.ValueText == "abstract"))
+                    continue;
+
                 if (currentClass.BaseList != null && currentClass.BaseList.Types.Any(x => x.ToString()==("IPredicate")))
                 {
                     newList.Add(($"{currentClass.Identifier.ValueText}Blueprint.cs", GetPredicateBluePrintSyntax(currentClass).ToString()));
