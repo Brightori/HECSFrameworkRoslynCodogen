@@ -32,10 +32,10 @@ namespace HECSFramework.Core.Generator
         public const string IReactCommand = "IReactCommand";
         public const string IReactComponentLocal = "IReactComponentLocal";
         public const string IReactComponentGlobal = "IReactComponentGlobal";
-        
+
         public const string IReactGenericGlobalComponent = "IReactGenericGlobalComponent";
         public const string IReactGenericLocalComponent = "IReactGenericLocalComponent";
-        
+
         public const string CurrentSystem = "currentSystem";
 
         public const string IReactNetworkCommandGlobal = "IReactNetworkCommandGlobal";
@@ -2408,7 +2408,7 @@ namespace HECSFramework.Core.Generator
                 if (currentClass.Modifiers.Any(x => x.ValueText == "abstract"))
                     continue;
 
-                if (currentClass.BaseList != null && currentClass.BaseList.Types.Any(x => x.ToString()==("IPredicate")))
+                if (currentClass.BaseList != null && currentClass.BaseList.Types.Any(x => x.ToString() == ("IPredicate")))
                 {
                     newList.Add(($"{currentClass.Identifier.ValueText}Blueprint.cs", GetPredicateBluePrintSyntax(currentClass).ToString()));
                 }
@@ -2510,7 +2510,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(new RightScopeSyntax(0));
 
             foreach (var t in commands)
-                resolvers.Add(GetCommandResolver(t));
+                GetCommandResolver(t, resolvers);
 
             typeToIdDictionary.Add(new TabSimpleSyntax(2, "public Dictionary<Type, int> CommandsIDs = new Dictionary<Type, int>"));
             typeToIdDictionary.Add(new LeftScopeSyntax(2));
@@ -2520,10 +2520,7 @@ namespace HECSFramework.Core.Generator
             for (int i = 0; i < commands.Count; i++)
             {
                 var t = commands[i];
-                dictionaryBody.Add(GetCommandMethod(t));
-
-                //if (i < commands.Count - 1)
-                //    dictionaryBody.Add(new ParagraphSyntax());
+                GetCommandMethod(t, dictionaryBody);
             }
 
             return tree.ToString();
@@ -2562,6 +2559,12 @@ namespace HECSFramework.Core.Generator
 
             foreach (var c in Program.networkCommands)
             {
+                if (c.TypeParameterList != null)
+                {
+                    ProcessGenericCommand(c, shortIDs);
+                    continue;
+                }
+
                 var shortIDdata = new ShortIDObject();
 
                 shortIDdata.Type = c.Identifier.ValueText;
@@ -2619,6 +2622,36 @@ namespace HECSFramework.Core.Generator
             return tree;
         }
 
+        private void ProcessGenericCommand(StructDeclarationSyntax structDeclarationSyntax, HashSet<ShortIDObject> shortIDObjects)
+        {
+            var name = structDeclarationSyntax.Identifier.ValueText;
+
+            foreach (var genericInterface in Program.genericInterfacesOverData)
+            {
+                var genericType = genericInterface.Value.GenericType;
+
+                if (genericType.Contains(name))
+                {
+
+                    var shortIDdata = new ShortIDObject();
+
+                    shortIDdata.Type = genericType;
+                    shortIDdata.TypeCode = IndexGenerator.GenerateIndex(genericType);
+
+                    if (structDeclarationSyntax.BaseList.ChildNodes().Any(x => x.ToString().Contains("INetworkCommand")))
+                    {
+                        shortIDdata.DataType = 0;
+                    }
+                    else
+                    {
+                        shortIDdata.DataType = 1;
+                    }
+
+                    shortIDObjects.Add(shortIDdata);
+                }
+            }
+        }
+
         private ISyntax InitShortIDPart()
         {
             var tree = new TreeSyntaxNode();
@@ -2635,11 +2668,22 @@ namespace HECSFramework.Core.Generator
             return tree;
         }
 
-        private ISyntax GetCommandMethod(StructDeclarationSyntax command)
+        private void GetCommandMethod(StructDeclarationSyntax command, TreeSyntaxNode dictionaryBody)
         {
-            var tree = new TreeSyntaxNode();
-            tree.Add(new TabSimpleSyntax(3, $"{{typeof({command.Identifier.ValueText}), {IndexGenerator.GetIndexForType(command.Identifier.ValueText)}}},"));
-            return tree;
+            if (command.TypeParameterList == null)
+                dictionaryBody.Add(new TabSimpleSyntax(3, $"{{typeof({command.Identifier.ValueText}), {IndexGenerator.GetIndexForType(command.Identifier.ValueText)}}},"));
+            else
+            {
+                foreach (var gi in Program.genericInterfacesOverData)
+                {
+                    var genericType = gi.Value.GenericType;
+
+                    if (genericType.Contains(command.Identifier.ValueText))
+                    {
+                        dictionaryBody.Add(new TabSimpleSyntax(3, $"{{typeof({genericType}), {IndexGenerator.GetIndexForType(genericType)}}},"));
+                    }
+                }
+            }
         }
 
         private ISyntax InitPartialCommandResolvers()
@@ -2658,9 +2702,22 @@ namespace HECSFramework.Core.Generator
             return tree;
         }
 
-        private ISyntax GetCommandResolver(StructDeclarationSyntax type)
+        private void GetCommandResolver(StructDeclarationSyntax type, TreeSyntaxNode treeSyntaxNode)
         {
-            return new TabSimpleSyntax(3, $"{{{IndexGenerator.GetIndexForType(type.Identifier.ValueText)}, new CommandResolver<{type.Identifier.ValueText}>()}},");
+            if (type.TypeParameterList == null)
+                treeSyntaxNode.Add(new TabSimpleSyntax(3, $"{{{IndexGenerator.GetIndexForType(type.Identifier.ValueText)}, new CommandResolver<{type.Identifier.ValueText}>()}},"));
+            else
+            {
+                foreach (var gi in Program.genericInterfacesOverData)
+                {
+                    var genericType = gi.Value.GenericType;
+
+                    if (genericType.Contains(type.Identifier.ValueText))
+                    {
+                        treeSyntaxNode.Add(new TabSimpleSyntax(3, $"{{{IndexGenerator.GetIndexForType(genericType)}, new CommandResolver<{genericType}>()}},"));
+                    }
+                }
+            }
         }
 
         #endregion
