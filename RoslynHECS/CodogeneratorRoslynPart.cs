@@ -40,6 +40,7 @@ namespace HECSFramework.Core.Generator
 
         public const string IReactNetworkCommandGlobal = "IReactNetworkCommandGlobal";
         public const string IReactNetworkCommandLocal = "IReactNetworkCommandLocal";
+        public const string GenericNetworkCommand = "GenericNetworkCommand";
 
         private HashSet<LinkedInterfaceNode> interfaceCache = new HashSet<LinkedInterfaceNode>(64);
         private HashSet<LinkedGenericInterfaceNode> interfaceGenericCache = new HashSet<LinkedGenericInterfaceNode>(64);
@@ -2616,7 +2617,6 @@ namespace HECSFramework.Core.Generator
                 }
             }
 
-
             tree.Add(InitShortIDPart());
 
             return tree;
@@ -2624,32 +2624,64 @@ namespace HECSFramework.Core.Generator
 
         private void ProcessGenericCommand(StructDeclarationSyntax structDeclarationSyntax, HashSet<ShortIDObject> shortIDObjects)
         {
-            var name = structDeclarationSyntax.Identifier.ValueText;
-
-            foreach (var genericInterface in Program.genericInterfacesOverData)
+            foreach (var attribute in structDeclarationSyntax.AttributeLists)
             {
-                var genericType = genericInterface.Value.GenericType;
-
-                if (genericType.Contains(name))
+                foreach (var a in attribute.Attributes)
                 {
-
-                    var shortIDdata = new ShortIDObject();
-
-                    shortIDdata.Type = genericType;
-                    shortIDdata.TypeCode = IndexGenerator.GenerateIndex(genericType);
-
-                    if (structDeclarationSyntax.BaseList.ChildNodes().Any(x => x.ToString().Contains("INetworkCommand")))
+                    if (a.ToString().Contains(GenericNetworkCommand))
                     {
-                        shortIDdata.DataType = 0;
-                    }
-                    else
-                    {
-                        shortIDdata.DataType = 1;
-                    }
+                        foreach (var dn in a.DescendantNodes())
+                        {
+                            if (dn is GenericNameSyntax nameSyntax)
+                            {
+                                var check = nameSyntax.ToString();
 
-                    shortIDObjects.Add(shortIDdata);
+                                var shortIDdata = new ShortIDObject();
+
+                                shortIDdata.Type = check;
+                                shortIDdata.TypeCode = IndexGenerator.GenerateIndex(check);
+
+                                if (structDeclarationSyntax.BaseList.ChildNodes().Any(x => x.ToString().Contains("INetworkCommand")))
+                                {
+                                    shortIDdata.DataType = 0;
+                                }
+                                else
+                                {
+                                    shortIDdata.DataType = 1;
+                                }
+
+                                shortIDObjects.Add(shortIDdata);
+                            }
+                        }
+                    }
                 }
             }
+        }
+
+        private HashSet<string> GetNetworkGenericTypes(StructDeclarationSyntax structDeclarationSyntax)
+        {
+            var newGenericTypes = new HashSet<string>(8);
+
+            foreach (var attribute in structDeclarationSyntax.AttributeLists)
+            {
+                foreach (var a in attribute.Attributes)
+                {
+                    if (a.ToString().Contains(GenericNetworkCommand))
+                    {
+                        foreach (var dn in a.DescendantNodes())
+                        {
+                            if (dn is GenericNameSyntax nameSyntax)
+                            {
+                                var check = nameSyntax.ToString();
+                                newGenericTypes.Add(check);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            return newGenericTypes;
         }
 
         private ISyntax InitShortIDPart()
@@ -2674,15 +2706,10 @@ namespace HECSFramework.Core.Generator
                 dictionaryBody.Add(new TabSimpleSyntax(3, $"{{typeof({command.Identifier.ValueText}), {IndexGenerator.GetIndexForType(command.Identifier.ValueText)}}},"));
             else
             {
-                foreach (var gi in Program.genericInterfacesOverData)
-                {
-                    var genericType = gi.Value.GenericType;
+                var hashSet = GetNetworkGenericTypes(command);
 
-                    if (genericType.Contains(command.Identifier.ValueText))
-                    {
-                        dictionaryBody.Add(new TabSimpleSyntax(3, $"{{typeof({genericType}), {IndexGenerator.GetIndexForType(genericType)}}},"));
-                    }
-                }
+                foreach (var h in hashSet)
+                    dictionaryBody.Add(new TabSimpleSyntax(3, $"{{typeof({h}), {IndexGenerator.GetIndexForType(h)}}},"));
             }
         }
 
@@ -2708,15 +2735,10 @@ namespace HECSFramework.Core.Generator
                 treeSyntaxNode.Add(new TabSimpleSyntax(3, $"{{{IndexGenerator.GetIndexForType(type.Identifier.ValueText)}, new CommandResolver<{type.Identifier.ValueText}>()}},"));
             else
             {
-                foreach (var gi in Program.genericInterfacesOverData)
-                {
-                    var genericType = gi.Value.GenericType;
+                var hashSet = GetNetworkGenericTypes(type);
 
-                    if (genericType.Contains(type.Identifier.ValueText))
-                    {
-                        treeSyntaxNode.Add(new TabSimpleSyntax(3, $"{{{IndexGenerator.GetIndexForType(genericType)}, new CommandResolver<{genericType}>()}},"));
-                    }
-                }
+                foreach (var h in hashSet)
+                    treeSyntaxNode.Add(new TabSimpleSyntax(3, $"{{{IndexGenerator.GetIndexForType(h)}, new CommandResolver<{h}>()}},"));
             }
         }
 
