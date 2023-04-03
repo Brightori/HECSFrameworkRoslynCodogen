@@ -47,8 +47,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> structs;
         public static List<InterfaceDeclarationSyntax> interfaces;
 
-        public static string ScriptsPath = @"D:\Develop\Shootervertical\Assets\";
-        public static string HECSGenerated = @"D:\Develop\Shootervertical\Assets\Scripts\HECSGenerated\";
+        public static string ScriptsPath = @"D:\UniverseClientCorp\Assets\";
+        public static string HECSGenerated = @"D:\UniverseClientCorp\Assets\Scripts\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
@@ -74,7 +74,7 @@ namespace RoslynHECS
 
         private static bool resolversNeeded = true;
         private static bool bluePrintsNeeded = true;
-        private static bool commandMapneeded = false;
+        private static bool commandMapneeded = true;
 
         public static bool CommandMapNeeded => commandMapneeded;
 

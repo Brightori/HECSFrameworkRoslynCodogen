@@ -2030,7 +2030,9 @@ namespace HECSFramework.Core.Generator
             tree.Add(new TabSimpleSyntax(3, "GetComponentFromContainer = GetComponentFromContainerFuncRealisation;"));
             tree.Add(new TabSimpleSyntax(3, "InitPartialCommandResolvers();"));
             tree.Add(new TabSimpleSyntax(3, "InitCustomResolvers();"));
+            tree.Add(new TabSimpleSyntax(3, "JSONModuleInit();"));
             tree.Add(new RightScopeSyntax(2));
+            tree.Add(new TabSimpleSyntax(2, "partial void JSONModuleInit();"));
             tree.Add(new TabSimpleSyntax(2, "partial void InitCustomResolvers();"));
             return tree;
         }
