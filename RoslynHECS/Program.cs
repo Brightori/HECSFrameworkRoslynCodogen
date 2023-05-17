@@ -47,8 +47,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> structs;
         public static List<InterfaceDeclarationSyntax> interfaces;
 
-        public static string ScriptsPath = @"D:\UniverseClientCorp\Assets\";
-        public static string HECSGenerated = @"D:\UniverseClientCorp\Assets\Scripts\HECSGenerated\";
+        public static string ScriptsPath = @"D:/UniverseServerCorp/Game.Server/ECS/";
+        public static string HECSGenerated = @"D:\UniverseServerCorp\Game.Server\ECS\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 

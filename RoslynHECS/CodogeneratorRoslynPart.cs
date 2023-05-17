@@ -41,6 +41,7 @@ namespace HECSFramework.Core.Generator
         public const string IReactNetworkCommandGlobal = "IReactNetworkCommandGlobal";
         public const string IReactNetworkCommandLocal = "IReactNetworkCommandLocal";
         public const string GenericNetworkCommand = "GenericNetworkCommand";
+        public const string IRequestProcessor = "IRequestProcessor";
 
         private HashSet<LinkedInterfaceNode> interfaceCache = new HashSet<LinkedInterfaceNode>(64);
         private HashSet<LinkedGenericInterfaceNode> interfaceGenericCache = new HashSet<LinkedGenericInterfaceNode>(64);
@@ -117,7 +118,7 @@ namespace HECSFramework.Core.Generator
 
                 foreach (var interfaceType in interfaceGenericCache)
                 {
-                    ProcessReacts(interfaceType, bindContainerBody, unbindContainer);
+                    ProcessReacts(interfaceType, bindContainerBody, unbindContainer, system.Value);
                 }
 
                 foreach (var systemPart in systemCasheParentsAndPartial)
@@ -156,8 +157,7 @@ namespace HECSFramework.Core.Generator
             return tree;
         }
 
-
-        private void ProcessReacts(LinkedGenericInterfaceNode part, ISyntax bindContainerBody, ISyntax unbindContainer)
+        private void ProcessReacts(LinkedGenericInterfaceNode part, ISyntax bindContainerBody, ISyntax unbindContainer, LinkedNode systemNode)
         {
             switch (part.BaseInterface.Name)
             {
@@ -200,8 +200,46 @@ namespace HECSFramework.Core.Generator
                         bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"LocalNetworkCommandListener<{part.GenericType}>.AddListener(currentSystem.Owner.World.Index, currentSystem);"));
                         unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"LocalNetworkCommandListener<{part.GenericType}>.RemoveListener(currentSystem.Owner.World.Index, currentSystem);"));
                         break;
+                    case IRequestProcessor:
+                        if (!part.MultiArguments)
+                            GetRequestResponseBody(part, bindContainerBody, unbindContainer, systemNode);
+                        else
+                            GetRequestContextResponseBody(part, bindContainerBody, unbindContainer, systemNode);
+                        break;
                 }
             }
+        }
+
+        private void GetRequestResponseBody(LinkedGenericInterfaceNode part, ISyntax bindContainerBody, ISyntax unbindContainer, LinkedNode systemNode)
+        {
+            bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"#if SERVER"));
+            bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"Server.ServerHelpers.GetSingleSystemFromServer<DataSenderSystem>(system.Owner.World).RegisterRequestProcessor<{part.GenericType}>(currentSystem, true);"));
+            bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"#else"));
+            bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"EntityManager.GetSingleSystem<DataSenderSystem>().RegisterRequestProcessor<{part.GenericType}>(currentSystem, true);"));
+            bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"#endif"));
+
+            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"#if SERVER"));
+            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"Server.ServerHelpers.GetSingleSystemFromServer<DataSenderSystem>(system.Owner.World).RegisterRequestProcessor<{part.GenericType}>(currentSystem, false);"));
+            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"#else"));
+            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"EntityManager.GetSingleSystem<DataSenderSystem>().RegisterRequestProcessor<{part.GenericType}>(currentSystem, false);"));
+            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"#endif"));
+        }
+
+        private void GetRequestContextResponseBody(LinkedGenericInterfaceNode part, ISyntax bindContainerBody, ISyntax unbindContainer, LinkedNode systemNode)
+        {
+            var secondType = part.GenericNameSyntax.TypeArgumentList.Arguments[1].ToString();
+
+            bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"#if SERVER"));
+            bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"Server.ServerHelpers.GetSingleSystemFromServer<DataSenderSystem>(system.Owner.World).RegisterRequestProcessor<{part.GenericType},{secondType}>(currentSystem, true);"));
+            bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"#else"));
+            bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"EntityManager.GetSingleSystem<DataSenderSystem>().RegisterRequestProcessor<{part.GenericType},{secondType}>(currentSystem, true);"));
+            bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"#endif"));
+
+            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"#if SERVER"));
+            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"Server.ServerHelpers.GetSingleSystemFromServer<DataSenderSystem>(system.Owner.World).RegisterRequestProcessor<{part.GenericType},{secondType}>(currentSystem, false);"));
+            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"#else"));
+            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"EntityManager.GetSingleSystem<DataSenderSystem>().RegisterRequestProcessor<{part.GenericType},{secondType}>(currentSystem, false);"));
+            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"#endif"));
         }
 
         private void SetPrivateComponentBinder(FieldDeclarationSyntax fieldDeclaration, string system, ISyntax fields, ISyntax binder, ISyntax unbinder)
