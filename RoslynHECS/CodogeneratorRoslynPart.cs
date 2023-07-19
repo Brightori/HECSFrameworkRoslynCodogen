@@ -219,9 +219,9 @@ namespace HECSFramework.Core.Generator
             bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"#endif"));
 
             unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"#if SERVER"));
-            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"Server.ServerHelpers.GetSingleSystemFromServer<DataSenderSystem>(system.Owner.World).RegisterRequestProcessor<{part.GenericType}>(currentSystem, false);"));
+            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"Server.ServerHelpers.GetSingleSystemFromServer<DataSenderSystem>(system.Owner.World)?.RegisterRequestProcessor<{part.GenericType}>(currentSystem, false);"));
             unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"#else"));
-            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"EntityManager.GetSingleSystem<DataSenderSystem>().RegisterRequestProcessor<{part.GenericType}>(currentSystem, false);"));
+            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"EntityManager.GetSingleSystem<DataSenderSystem>()?.RegisterRequestProcessor<{part.GenericType}>(currentSystem, false);"));
             unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"#endif"));
         }
 
@@ -236,9 +236,9 @@ namespace HECSFramework.Core.Generator
             bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"#endif"));
 
             unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"#if SERVER"));
-            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"Server.ServerHelpers.GetSingleSystemFromServer<DataSenderSystem>(system.Owner.World).RegisterRequestProcessor<{part.GenericType},{secondType}>(currentSystem, false);"));
+            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"Server.ServerHelpers.GetSingleSystemFromServer<DataSenderSystem>(system.Owner.World)?.RegisterRequestProcessor<{part.GenericType},{secondType}>(currentSystem, false);"));
             unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"#else"));
-            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"EntityManager.GetSingleSystem<DataSenderSystem>().RegisterRequestProcessor<{part.GenericType},{secondType}>(currentSystem, false);"));
+            unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"EntityManager.GetSingleSystem<DataSenderSystem>()?.RegisterRequestProcessor<{part.GenericType},{secondType}>(currentSystem, false);"));
             unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"#endif"));
         }
 
