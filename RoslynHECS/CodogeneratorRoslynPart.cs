@@ -279,16 +279,31 @@ namespace HECSFramework.Core.Generator
         {
             var findComponent = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax && Program.componentOverData.ContainsKey(x.ToString()));
 
-            if (findComponent == null) return;
+            var fieldType = findComponent?.ToString();
 
-            var fieldType = findComponent.ToString();
+            if (fieldType == null)
+            {
+                fieldType = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax && Program.systemOverData.ContainsKey(x.ToString()))?.ToString();
+            }
+            
+            if (fieldType == null) return;
+
             var fieldName = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is VariableDeclaratorSyntax).ToString();
 
             var fieldBindName = fieldName + "FieldSingleBinding";
-
-            fields.Tree.Add(new TabSimpleSyntax(2, $"private FieldInfo {fieldBindName} = typeof({system}).GetField({CParse.Quote}{fieldName}{CParse.Quote}, BindingFlags.Instance | BindingFlags.NonPublic);"));
-            binder.Tree.Add(new TabSimpleSyntax(3, $"{fieldBindName}.SetValue({CurrentSystem}, {CurrentSystem}.Owner.World.GetSingleComponent<{fieldType}>());"));
-            unbinder.Tree.Add(new TabSimpleSyntax(3, $"{fieldBindName}.SetValue(system, null);"));
+            
+            if (Program.systemOverData.ContainsKey(fieldType))
+            {
+                fields.Tree.Add(new TabSimpleSyntax(2, $"private FieldInfo {fieldBindName} = typeof({system}).GetField({CParse.Quote}{fieldName}{CParse.Quote}, BindingFlags.Instance | BindingFlags.NonPublic);"));
+                binder.Tree.Add(new TabSimpleSyntax(3, $"{fieldBindName}.SetValue({CurrentSystem}, {CurrentSystem}.Owner.World.GetSingleSystem<{fieldType}>());"));
+                unbinder.Tree.Add(new TabSimpleSyntax(3, $"{fieldBindName}.SetValue(system, null);"));
+            }
+            else
+            {
+                fields.Tree.Add(new TabSimpleSyntax(2, $"private FieldInfo {fieldBindName} = typeof({system}).GetField({CParse.Quote}{fieldName}{CParse.Quote}, BindingFlags.Instance | BindingFlags.NonPublic);"));
+                binder.Tree.Add(new TabSimpleSyntax(3, $"{fieldBindName}.SetValue({CurrentSystem}, {CurrentSystem}.Owner.World.GetSingleComponent<{fieldType}>());"));
+                unbinder.Tree.Add(new TabSimpleSyntax(3, $"{fieldBindName}.SetValue(system, null);"));
+            }
         }
 
         private void SetPublicComponentBinder(FieldDeclarationSyntax fieldDeclaration, string system, ISyntax binder, ISyntax unbinder)
@@ -302,11 +317,27 @@ namespace HECSFramework.Core.Generator
 
         private void SetPublicSingleComponentBinder(FieldDeclarationSyntax fieldDeclaration, string system, ISyntax binder, ISyntax unbinder)
         {
-            var fieldType = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax && Program.componentOverData.ContainsKey(x.ToString())).ToString();
+            var fieldType = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax && Program.componentOverData.ContainsKey(x.ToString()))?.ToString();
+
+            if (fieldType == null)
+            {
+                fieldType = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax && Program.systemOverData.ContainsKey(x.ToString()))?.ToString();
+            }
+            
+            if (fieldType == null) return;
+
             var fieldName = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is VariableDeclaratorSyntax).ToString();
 
-            binder.Tree.Add(new TabSimpleSyntax(3, $"{CurrentSystem}.{fieldName} = {CurrentSystem}.Owner.World.GetSingleComponent<{fieldType}>();"));
-            unbinder.Tree.Add(new TabSimpleSyntax(3, $"{CurrentSystem}.{fieldName} = null;"));
+            if (Program.systemOverData.ContainsKey(fieldType))
+            {
+                binder.Tree.Add(new TabSimpleSyntax(3, $"{CurrentSystem}.{fieldName} = {CurrentSystem}.Owner.World.GetSingleSystem<{fieldType}>();"));
+                unbinder.Tree.Add(new TabSimpleSyntax(3, $"{CurrentSystem}.{fieldName} = null;"));
+            }
+            else
+            {
+                binder.Tree.Add(new TabSimpleSyntax(3, $"{CurrentSystem}.{fieldName} = {CurrentSystem}.Owner.World.GetSingleComponent<{fieldType}>();"));
+                unbinder.Tree.Add(new TabSimpleSyntax(3, $"{CurrentSystem}.{fieldName} = null;"));
+            }
         }
 
         /// <summary>
