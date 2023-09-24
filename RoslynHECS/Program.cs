@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -99,20 +100,31 @@ namespace RoslynHECS
             files = new DirectoryInfo(ScriptsPath).GetFiles("*.cs", SearchOption.AllDirectories).Where(x => !x.FullName.Contains("\\Plugins") && !x.FullName.Contains("\\HECSGenerated") && !x.FullName.Contains("\\MessagePack")).ToList();
             Console.WriteLine(files.Count);
 
-            var list = new List<SyntaxTree>(2048);
+            var list = new ConcurrentBag<SyntaxTree>();
+            var tasks = new List<Task>(2048);
 
             foreach (var f in files)
             {
                 if (f.Extension == ".cs")
                 {
-                    var s = File.ReadAllText(f.FullName);
-                    var syntaxTree = CSharpSyntaxTree.ParseText(s);
-                    list.Add(syntaxTree);
-
-                    if (f.Name == CommandsMap)
-                        alrdyHaveCommandMap = f;
+                    tasks.Add(MakeTree(f, list));
                 }
             }
+
+            await Task.WhenAll(tasks);
+
+            //foreach (var f in files)
+            //{
+            //    if (f.Extension == ".cs")
+            //    {
+            //        var s = File.ReadAllText(f.FullName);
+            //        var syntaxTree = CSharpSyntaxTree.ParseText(s);
+            //        list.Add(syntaxTree);
+
+            //        if (f.Name == CommandsMap)
+            //            alrdyHaveCommandMap = f;
+            //    }
+            //}
 
             Compilation = CSharpCompilation.Create("HelloWorld").AddSyntaxTrees(list);
 
@@ -177,6 +189,16 @@ namespace RoslynHECS
             SaveFiles();
             Console.WriteLine("успешно сохранено");
             //Thread.Sleep(1500);
+        }
+
+        private static async Task MakeTree(FileInfo f, ConcurrentBag<SyntaxTree> syntaxTrees)
+        {
+            var s = await File.ReadAllTextAsync(f.FullName);
+            var syntaxTree = CSharpSyntaxTree.ParseText(s);
+            syntaxTrees.Add(syntaxTree);
+
+            if (f.Name == CommandsMap)
+                alrdyHaveCommandMap = f;
         }
 
         private static void CheckArgs(string[] args)
@@ -265,7 +287,7 @@ namespace RoslynHECS
 
                 foreach (var c in predicatesBPs)
                     SaveToFile(c.Item1, c.Item2, ScriptsPath + PredicatesBlueprints);
-                
+
                 foreach (var c in actionsBPs)
                     SaveToFile(c.Item1, c.Item2, ScriptsPath + ActionsBlueprints);
 
@@ -353,7 +375,7 @@ namespace RoslynHECS
 
             //we add here custom resolvers what alrdy on project
             if (s.AttributeLists.Count > 0)
-            { 
+            {
                 foreach (var a in s.AttributeLists)
                 {
                     foreach (var attr in a.Attributes)
@@ -905,7 +927,7 @@ namespace RoslynHECS
                 currentNode = currentNode.Parent;
                 yield return currentNode;
             }
-                
+
             yield break;
         }
 
