@@ -389,7 +389,7 @@ namespace HECSFramework.Core.Generator
 
             tree.Add(new NameSpaceSyntax(DefaultNameSpace));
             tree.Add(new LeftScopeSyntax());
-            tree.Add(new CompositeSyntax(new TabSpaceSyntax(1), new SimpleSyntax($"public partial class {typeof(TypesProvider).Name}"), new ParagraphSyntax()));
+            tree.Add(new CompositeSyntax(new TabSpaceSyntax(1), new SimpleSyntax($"public partial class TypesProvider"), new ParagraphSyntax()));
             tree.Add(new LeftScopeSyntax(1));
             tree.Add(new TabSimpleSyntax(2, "public TypesProvider()"));
             tree.Add(new LeftScopeSyntax(2));
@@ -602,7 +602,7 @@ namespace HECSFramework.Core.Generator
             composite.Add(new TabSpaceSyntax(3));
             composite.Add(new SimpleSyntax(CParse.LeftScope));
             composite.Add(new CompositeSyntax(new SimpleSyntax(CParse.Space + IndexGenerator.GetIndexForType(c.Identifier.ValueText).ToString() + CParse.Comma)));
-            composite.Add(new SimpleSyntax($" new ComponentMaskAndIndex {{ComponentName = {CParse.Quote}{c.Identifier.ValueText}{(CParse.Quote)}, ComponentsMask = new {typeof(HECSMask).Name}"));
+            composite.Add(new SimpleSyntax($" new ComponentMaskAndIndex {{ComponentName = {CParse.Quote}{c.Identifier.ValueText}{(CParse.Quote)}, ComponentsMask = new HECSMask;"));
             composite.Add(new ParagraphSyntax());
             composite.Add(MaskPart);
             composite.Add(new CompositeSyntax(new TabSpaceSyntax(3), new SimpleSyntax("}},")));
@@ -664,7 +664,7 @@ namespace HECSFramework.Core.Generator
             var maskBody = new TreeSyntaxNode();
 
             tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(4, $"new {typeof(HECSMask).Name}"));
+            tree.Add(new TabSimpleSyntax(4, $"new HECSMask"));
             tree.Add(new LeftScopeSyntax(4));
             tree.Add(maskBody);
             tree.Add(new RightScopeSyntax(4, true));
@@ -703,14 +703,14 @@ namespace HECSFramework.Core.Generator
 
         private string GetHECSMaskNameRoslyn()
         {
-            return typeof(HECSMask).Name;
+            return "HECSMask";
         }
 
         private ISyntax GetHecsMasksFieldsRoslyn()
         {
             var tree = new TreeSyntaxNode();
 
-            var hecsMaskname = typeof(HECSMask).Name;
+            var hecsMaskname = "HECSMask"; 
 
             for (int i = 0; i < Program.componentsDeclarations.Count; i++)
             {
@@ -852,8 +852,8 @@ namespace HECSFramework.Core.Generator
         #region GenerateComponentMask
         public string GenerateMaskProviderRoslyn()
         {
-            var className = typeof(MaskProvider).Name;
-            var hecsMaskname = typeof(HECSMask).Name;
+            var className = "MaskProvider";
+            var hecsMaskname = "HECSMask";
 
             var hecsMaskPart = new TreeSyntaxNode();
 
@@ -970,7 +970,7 @@ namespace HECSFramework.Core.Generator
         private ISyntax HecsMaskPartRoslyn(ISyntax body)
         {
             var tree = new TreeSyntaxNode();
-            var maskType = typeof(HECSMask).Name;
+            var maskType = "HECSMask";
 
             //tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
             //tree.Add(new LeftScopeSyntax());
@@ -987,7 +987,7 @@ namespace HECSFramework.Core.Generator
         private ISyntax GetHashCodeRoslyn(ISyntax body)
         {
             var tree = new TreeSyntaxNode();
-            var maskType = typeof(HECSMask).Name;
+            var maskType = "HECSMask";
             tree.Add(new TabSimpleSyntax(2, $"public int GetHashCodeFunc(ref {maskType} mask)"));
             tree.Add(new LeftScopeSyntax(2));
             tree.Add(new TabSimpleSyntax(3, "unchecked"));
@@ -1003,7 +1003,7 @@ namespace HECSFramework.Core.Generator
         private ISyntax EqualMaskRoslyn(ISyntax body)
         {
             var tree = new TreeSyntaxNode();
-            var maskSyntax = typeof(HECSMask).Name;
+            var maskSyntax = "HECSMask";
 
             tree.Add(new TabSimpleSyntax(2, $"public bool GetEqualityOfMasksFunc(ref {maskSyntax} mask, object other)"));
             tree.Add(new LeftScopeSyntax(2));

@@ -3,9 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
-using HECSFramework.Core;
 using HECSFramework.Core.Generator;
 using HECSFramework.Core.Helpers;
 using Microsoft.Build.Locator;
@@ -85,7 +83,7 @@ namespace RoslynHECS
         private static FileInfo alrdyHaveCommandMap;
         public static CSharpCompilation Compilation;
 
-        static async Task Main(string[] args)
+        public static async Task Process(string[] args)
         {
             CheckArgs(args);
 
@@ -347,7 +345,7 @@ namespace RoslynHECS
             var structCurrent = s.Identifier.ValueText;
             structByName.TryAdd(structCurrent, s);
 
-            if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains(typeof(IGlobalCommand).Name)))
+            if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains("IGlobalCommand")))
             {
                 globalCommands.AddOrRemoveElement(s, true);
                 localCommands.AddOrRemoveElement(s, true);
@@ -359,7 +357,7 @@ namespace RoslynHECS
                 fastComponents.AddOrRemoveElement(s, true);
             }
 
-            if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains(typeof(ICommand).Name)))
+            if (s.BaseList != null && s.BaseList.ChildNodes().Any(x => x.ToString().Contains("ICommand")))
             {
                 localCommands.AddOrRemoveElement(s, true);
                 Console.WriteLine("нашли локальную команду " + structCurrent);
