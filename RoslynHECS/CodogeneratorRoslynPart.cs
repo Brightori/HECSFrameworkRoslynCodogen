@@ -13,6 +13,16 @@ namespace HECSFramework.Core.Generator
 {
     public partial class CodeGenerator
     {
+        private readonly string DefaultPath = "/Scripts/HECSGenerated/";
+        private readonly string ComponentsPath = "/Scripts/Components/";
+        private readonly string DefaultNameSpace = "HECSFramework.Core";
+        private readonly string TypesMap = "TypesMap.cs";
+        private readonly string ComponentID = "ComponentID.cs";
+        private readonly string ComponentsMask = "ComponentsMask.cs";
+        private readonly string ComponentsContext = "ComponentContext.cs";
+        private readonly string PartialWorld = "WorldPart.cs";
+        private readonly string EntityGenericExtentions = "EntityGenericExtentions.cs";
+
         public HashSet<ClassDeclarationSyntax> needResolver = new HashSet<ClassDeclarationSyntax>();
         public List<ClassDeclarationSyntax> containersSolve = new List<ClassDeclarationSyntax>();
         public List<Type> commands = new List<Type>();
