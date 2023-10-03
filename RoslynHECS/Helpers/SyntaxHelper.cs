@@ -1,6 +1,6 @@
 ﻿using System.Linq;
 using System.Runtime.CompilerServices;
-using HECSFramework.Core.Generator;
+using HECSFramework.Core.DLLGenerator;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace RoslynHECS.Helpers

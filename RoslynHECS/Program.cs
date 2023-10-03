@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using HECSFramework.Core.Generator;
+using HECSFramework.Core.DLLGenerator;
 using HECSFramework.Core.Helpers;
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
@@ -13,7 +13,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
 using RoslynHECS.DataTypes;
 using RoslynHECS.Helpers;
-using static HECSFramework.Core.Generator.CodeGenerator;
+using static HECSFramework.Core.DLLGenerator.CodeGenerator;
 using ClassDeclarationSyntax = Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax;
 using SyntaxNode = Microsoft.CodeAnalysis.SyntaxNode;
 

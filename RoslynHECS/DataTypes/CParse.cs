@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace HECSFramework.Core.Generator
+namespace HECSFramework.Core.DLLGenerator
 {
     internal static class CParse
     {

@@ -9,7 +9,7 @@ using RoslynHECS;
 using RoslynHECS.DataTypes;
 using RoslynHECS.Helpers;
 
-namespace HECSFramework.Core.Generator
+namespace HECSFramework.Core.DLLGenerator
 {
     public partial class CodeGenerator
     {
@@ -22,6 +22,7 @@ namespace HECSFramework.Core.Generator
         private readonly string ComponentsContext = "ComponentContext.cs";
         private readonly string PartialWorld = "WorldPart.cs";
         private readonly string EntityGenericExtentions = "EntityGenericExtentions.cs";
+        private const string AggressiveInline = "[MethodImpl(MethodImplOptions.AggressiveInlining)]";
 
         public HashSet<ClassDeclarationSyntax> needResolver = new HashSet<ClassDeclarationSyntax>();
         public List<ClassDeclarationSyntax> containersSolve = new List<ClassDeclarationSyntax>();
@@ -1233,7 +1234,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(new LeftScopeSyntax(2));
             tree.Add(constructor);
             tree.Add(new RightScopeSyntax(2));
-            tree.Add(new TabSimpleSyntax(2, $"public void Out(ref {typeof(Entity).Name} entity)"));
+            tree.Add(new TabSimpleSyntax(2, $"public void Out(ref Entity entity)"));
             tree.Add(new LeftScopeSyntax(2));
             tree.Add(GetOutToEntityVoidBodyRoslyn(c.ClassDeclaration));
             tree.Add(new RightScopeSyntax(2));
@@ -2941,23 +2942,6 @@ namespace HECSFramework.Core.Generator
 
                 //typeHolder[t].comments.Add(documentation.Comment);
             }
-        }
-
-        private ISyntax GetDocumentationTypeRoslyn(Type type)
-        {
-            var tree = new TreeSyntaxNode();
-            string documentationType;
-
-            if (componentTypes.Contains(type))
-                documentationType = "DocumentationType.Component";
-            else if (systems.Contains(type))
-                documentationType = "DocumentationType.System";
-            else
-                documentationType = "DocumentationType.Common";
-
-            tree.Add(new TabSimpleSyntax(5, $"DocumentationType = {documentationType},"));
-
-            return tree;
         }
 
         private ISyntax GetStringArrayRoslyn(string name, List<string> toArray)

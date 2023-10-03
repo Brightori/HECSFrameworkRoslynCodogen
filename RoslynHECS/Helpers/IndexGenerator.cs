@@ -2,7 +2,7 @@
 
 namespace HECSFramework.Core
 {
-    public static class IndexGenerator
+    internal static class IndexGenerator
     {
         public static int GenerateIndex(this string data)
         {

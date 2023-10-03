@@ -1,6 +1,6 @@
 ﻿using RoslynHECS;
 
-namespace HECSFramework.Core.Generator
+namespace HECSFramework.Core.DLLGenerator
 {
     public partial class CodeGenerator
     {

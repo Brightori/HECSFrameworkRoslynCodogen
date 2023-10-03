@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using RoslynHECS.DataTypes;
 using RoslynHECS.Helpers;
 
-namespace HECSFramework.Core.Generator
+namespace HECSFramework.Core.DLLGenerator
 {
     public struct GatheredField
     {

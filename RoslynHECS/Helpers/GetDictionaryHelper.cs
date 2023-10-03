@@ -1,4 +1,4 @@
-﻿using HECSFramework.Core.Generator;
+﻿using HECSFramework.Core.DLLGenerator;
 
 namespace RoslynHECS.Helpers
 {
