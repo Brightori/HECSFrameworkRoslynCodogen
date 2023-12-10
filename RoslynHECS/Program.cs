@@ -48,8 +48,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> structs;
         public static List<InterfaceDeclarationSyntax> interfaces;
 
-        public static string ScriptsPath = @"D:\Develop\BastionTrain\Assets\";
-        public static string HECSGenerated = @"D:\Develop\BastionTrain\Assets\Scripts\HECSGenerated\";
+        public static string ScriptsPath = @"D:\Develop\InTheWood\Assets\";
+        public static string HECSGenerated = @"D:\Develop\InTheWood\Assets\Scripts\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
@@ -185,7 +185,9 @@ namespace RoslynHECS
                 c.Interfaces = newInterfaces;
             }
 
-            Console.WriteLine("нашли компоненты " + componentOverData.Count);
+            Console.WriteLine("components " + componentOverData.Count);
+            Console.WriteLine("systems" + systemOverData.Count);
+
             SaveFiles();
             Console.WriteLine("успешно сохранено");
             //Thread.Sleep(1500);

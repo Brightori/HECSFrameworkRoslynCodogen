@@ -2576,6 +2576,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(new UsingSyntax("System"));
             tree.Add(new UsingSyntax("HECSFramework.Core"));
             tree.Add(new UsingSyntax("HECSFramework.Unity"));
+            tree.Add(new UsingSyntax("Components"));
             tree.Add(new UsingSyntax("UnityEngine", 1));
 
             tree.Add(new TabSimpleSyntax(0, $"[CreateAssetMenu(fileName = {CParse.Quote}{classDeclarationSyntax.Identifier.ValueText}{CParse.Quote}, menuName = {CParse.Quote}BluePrints/Actions/{classDeclarationSyntax.Identifier.ValueText}{CParse.Quote})]"));
