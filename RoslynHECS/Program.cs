@@ -48,8 +48,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> structs;
         public static List<InterfaceDeclarationSyntax> interfaces;
 
-        public static string ScriptsPath = @"D:\Develop\InTheWood\Assets\";
-        public static string HECSGenerated = @"D:\Develop\InTheWood\Assets\Scripts\HECSGenerated\";
+        public static string ScriptsPath = @"D:\Develop\AnimalWar\Assets\";
+        public static string HECSGenerated = @"D:\Develop\AnimalWar\Assets\Scripts\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 

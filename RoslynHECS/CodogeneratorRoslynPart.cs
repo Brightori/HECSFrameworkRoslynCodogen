@@ -186,22 +186,22 @@ namespace HECSFramework.Core.Generator
                     bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactCommand<{part.GenericType}>(system, {CurrentSystem});"));
                     unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactCommand<{part.GenericType}>({CurrentSystem});"));
                     break;
-                case IReactComponentLocal:
-                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddLocalReactComponent<{part.GenericType}>(system.Owner.Index, {CurrentSystem}, true);"));
-                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddLocalReactComponent<{part.GenericType}>(system.Owner.Index, {CurrentSystem}, false);"));
-                    break;
-                case IReactComponentGlobal:
-                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactComponent<{part.GenericType}>({CurrentSystem}, true);"));
-                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactComponent<{part.GenericType}>({CurrentSystem}, false);"));
-                    break;
-                case IReactGenericLocalComponent:
-                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddLocalGenericReactComponent<{part.GenericType}>(system.Owner.Index, {CurrentSystem}, true);"));
-                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddLocalGenericReactComponent<{part.GenericType}>(system.Owner.Index, {CurrentSystem}, false);"));
-                    break;
-                case IReactGenericGlobalComponent:
-                    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalGenericReactComponent<{part.GenericType}>({CurrentSystem}, true);"));
-                    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalGenericReactComponent<{part.GenericType}>({CurrentSystem}, false);"));
-                    break;
+                //case IReactComponentLocal:
+                //    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddLocalReactComponent<{part.GenericType}>(system.Owner.Index, {CurrentSystem}, true);"));
+                //    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddLocalReactComponent<{part.GenericType}>(system.Owner.Index, {CurrentSystem}, false);"));
+                //    break;
+                //case IReactComponentGlobal:
+                //    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactComponent<{part.GenericType}>({CurrentSystem}, true);"));
+                //    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactComponent<{part.GenericType}>({CurrentSystem}, false);"));
+                //    break;
+                //case IReactGenericLocalComponent:
+                //    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddLocalGenericReactComponent<{part.GenericType}>(system.Owner.Index, {CurrentSystem}, true);"));
+                //    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddLocalGenericReactComponent<{part.GenericType}>(system.Owner.Index, {CurrentSystem}, false);"));
+                //    break;
+                //case IReactGenericGlobalComponent:
+                //    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalGenericReactComponent<{part.GenericType}>({CurrentSystem}, true);"));
+                //    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalGenericReactComponent<{part.GenericType}>({CurrentSystem}, false);"));
+                //    break;
             }
 
             if (Program.CommandMapNeeded)
