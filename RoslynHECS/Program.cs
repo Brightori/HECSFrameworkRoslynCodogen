@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -630,6 +631,7 @@ namespace RoslynHECS
                     IsAbstract = sys.Modifiers.Any(x => x.ValueText == "abstract"),
                     IsPartial = sys.Modifiers.Any(x => x.ValueText == "partial"),
                     Parts = new HashSet<ClassDeclarationSyntax>(),
+                    IsGeneric = sys.TypeParameterList != null,
                     Interfaces = new HashSet<LinkedInterfaceNode>(),
                 });
 
@@ -751,7 +753,14 @@ namespace RoslynHECS
 
         private static void ProcessLinkNodes(LinkedNode linkedNode)
         {
-            var children = classes.Where(x => x.BaseList != null && x.BaseList.Types.Any(z => z.ToString() == linkedNode.Name));
+            IEnumerable<ClassDeclarationSyntax> children = null;
+
+            if (linkedNode.IsGeneric)
+            {
+                children = classes.Where(x => x.BaseList != null && x.BaseList.Types.Any(z => z.Type is GenericNameSyntax nameSyntax && nameSyntax.Identifier.ValueText == linkedNode.Name));
+            }
+            else
+                children = classes.Where(x => x.BaseList != null && x.BaseList.Types.Any(z => z.ToString() == linkedNode.Name));
 
             foreach (var sys in children)
             {
@@ -769,6 +778,7 @@ namespace RoslynHECS
                     IsAbstract = sys.Modifiers.Any(x => x.ValueText == "abstract"),
                     IsPartial = sys.Modifiers.Any(x => x.ValueText == "partial"),
                     Parts = new HashSet<ClassDeclarationSyntax>(8),
+                    IsGeneric = sys.TypeParameterList != null,
                     Interfaces = new HashSet<LinkedInterfaceNode>(8),
                 });
 
