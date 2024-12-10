@@ -29,6 +29,7 @@ namespace HECSFramework.Core.Generator
 
         public const string IReactGlobalCommand = "IReactGlobalCommand";
         public const string INetworkComponent = "INetworkComponent";
+        public const string IRequestProvider = "IRequestProvider";
         public const string IReactCommand = "IReactCommand";
         public const string IReactComponentLocal = "IReactComponentLocal";
         public const string IReactComponentGlobal = "IReactComponentGlobal";
@@ -186,6 +187,20 @@ namespace HECSFramework.Core.Generator
                     bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddGlobalReactCommand<{part.GenericType}>(system, {CurrentSystem});"));
                     unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveGlobalReactCommand<{part.GenericType}>({CurrentSystem});"));
                     break;
+                case IRequestProvider:
+                {
+                    if (part.MultiArguments)
+                    {
+                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddRequestProvider<{part.GenericNameSyntax.TypeArgumentList.Arguments[0]},{part.GenericNameSyntax.TypeArgumentList.Arguments[1]}>({CurrentSystem});"));
+                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveRequestProvider<{part.GenericNameSyntax.TypeArgumentList.Arguments[0]},{part.GenericNameSyntax.TypeArgumentList.Arguments[1]}>({CurrentSystem});"));
+                    }
+                    else
+                    {
+                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddRequestProvider<{part.GenericType}>({CurrentSystem});"));
+                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveRequestProvider<{part.GenericType}>({CurrentSystem});"));
+                    }
+                    break;
+                }
                 //case IReactComponentLocal:
                 //    bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddLocalReactComponent<{part.GenericType}>(system.Owner.Index, {CurrentSystem}, true);"));
                 //    unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddLocalReactComponent<{part.GenericType}>(system.Owner.Index, {CurrentSystem}, false);"));
@@ -285,13 +300,13 @@ namespace HECSFramework.Core.Generator
             {
                 fieldType = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax && Program.systemOverData.ContainsKey(x.ToString()))?.ToString();
             }
-            
+
             if (fieldType == null) return;
 
             var fieldName = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is VariableDeclaratorSyntax).ToString();
 
             var fieldBindName = fieldName + "FieldSingleBinding";
-            
+
             if (Program.systemOverData.ContainsKey(fieldType))
             {
                 fields.Tree.Add(new TabSimpleSyntax(2, $"private FieldInfo {fieldBindName} = typeof({system}).GetField({CParse.Quote}{fieldName}{CParse.Quote}, BindingFlags.Instance | BindingFlags.NonPublic);"));
@@ -323,7 +338,7 @@ namespace HECSFramework.Core.Generator
             {
                 fieldType = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is IdentifierNameSyntax && Program.systemOverData.ContainsKey(x.ToString()))?.ToString();
             }
-            
+
             if (fieldType == null) return;
 
             var fieldName = fieldDeclaration.DescendantNodes().FirstOrDefault(x => x is VariableDeclaratorSyntax).ToString();
