@@ -2570,6 +2570,27 @@ namespace HECSFramework.Core.Generator
             return newList;
         }
 
+        public List<(string, string)> GetAsyncActionsBluePrints()
+        {
+            var newList = new List<(string, string)>(2048);
+
+            var count = Program.classes.Count;
+            var classes = Program.classes;
+
+            for (int i = 0; i < count; i++)
+            {
+                var currentClass = classes[i];
+
+                if (currentClass.BaseList != null && currentClass.BaseList.Types.Any(x => x.ToString() == ("IAsyncAction")))
+                {
+                    newList.Add(($"{currentClass.Identifier.ValueText}Blueprint.cs", GetAsyncActionsBluePrintSyntax(currentClass).ToString()));
+                }
+            }
+
+            return newList;
+        }
+
+
         private ISyntax GetActionsBluePrintSyntax(ClassDeclarationSyntax classDeclarationSyntax)
         {
             var tree = new TreeSyntaxNode();
@@ -2585,6 +2606,23 @@ namespace HECSFramework.Core.Generator
             tree.Add(new RightScopeSyntax());
             return tree;
         }
+
+        private ISyntax GetAsyncActionsBluePrintSyntax(ClassDeclarationSyntax classDeclarationSyntax)
+        {
+            var tree = new TreeSyntaxNode();
+            tree.Add(new UsingSyntax("System"));
+            tree.Add(new UsingSyntax("HECSFramework.Core"));
+            tree.Add(new UsingSyntax("HECSFramework.Unity"));
+            tree.Add(new UsingSyntax("Components"));
+            tree.Add(new UsingSyntax("UnityEngine", 1));
+
+            tree.Add(new TabSimpleSyntax(0, $"[CreateAssetMenu(fileName = {CParse.Quote}{classDeclarationSyntax.Identifier.ValueText}{CParse.Quote}, menuName = {CParse.Quote}BluePrints/AsyncActions/{classDeclarationSyntax.Identifier.ValueText}{CParse.Quote})]"));
+            tree.Add(new TabSimpleSyntax(0, $"public class {classDeclarationSyntax.Identifier.ValueText}Blueprint : AsyncActionBluePrint<{classDeclarationSyntax.Identifier}>"));
+            tree.Add(new LeftScopeSyntax());
+            tree.Add(new RightScopeSyntax());
+            return tree;
+        }
+
         #endregion
 
         #region CommandsResolvers

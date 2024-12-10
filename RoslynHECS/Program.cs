@@ -49,8 +49,8 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> structs;
         public static List<InterfaceDeclarationSyntax> interfaces;
 
-        public static string ScriptsPath = @"D:\Develop\AnimalWar\Assets\";
-        public static string HECSGenerated = @"D:\Develop\AnimalWar\Assets\Scripts\HECSGenerated\";
+        public static string ScriptsPath = @"D:\Develop\HECSonBoardingLFS\Assets\";
+        public static string HECSGenerated = @"D:\Develop\HECSonBoardingLFS\Assets\Scripts\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
@@ -278,6 +278,7 @@ namespace RoslynHECS
                 var systemsBPFiles = processGeneration.GenerateSystemsBluePrints();
                 var predicatesBPs = processGeneration.GetPredicateBluePrints();
                 var actionsBPs = processGeneration.GetActionsBluePrints();
+                var actionsAsyncBPs = processGeneration.GetAsyncActionsBluePrints();
 
                 //CleanDirectory(ScriptsPath + ComponentsBluePrintsPath);
                 //CleanDirectory(ScriptsPath + SystemsBluePrintsPath);
@@ -292,6 +293,9 @@ namespace RoslynHECS
                     SaveToFile(c.Item1, c.Item2, ScriptsPath + PredicatesBlueprints);
 
                 foreach (var c in actionsBPs)
+                    SaveToFile(c.Item1, c.Item2, ScriptsPath + ActionsBlueprints);
+
+                foreach (var c in actionsAsyncBPs)
                     SaveToFile(c.Item1, c.Item2, ScriptsPath + ActionsBlueprints);
 
                 SaveToFile(BluePrintsProvider, processGeneration.GetBluePrintsProvider(), HECSGenerated, needToImport: true);
