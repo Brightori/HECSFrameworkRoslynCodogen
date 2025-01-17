@@ -53,15 +53,18 @@ namespace HECSFramework.Core.Generator
         {
             var tree = new TreeSyntaxNode();
             var bindSystemFunc = new TreeSyntaxNode();
+            var usingSpaces = new TreeSyntaxNode();
 
             tree.Add(new UsingSyntax("System"));
-            tree.Add(new UsingSyntax("Systems"));
-            tree.Add(new UsingSyntax("Commands", 1));
+            //tree.Add(new UsingSyntax("Systems"));
             tree.Add(new UsingSyntax("Components"));
+            tree.Add(new UsingSyntax("Cysharp.Threading.Tasks"));
+            tree.Add(usingSpaces);
+            //tree.Add(new UsingSyntax("Commands", 1));
             tree.Add(new UsingSyntax("System.Reflection"));
             tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
             tree.Add(new LeftScopeSyntax());
-            tree.Add(GetContaineresForSystems());
+            tree.Add(GetContaineresForSystems(usingSpaces));
             tree.Add(new TabSimpleSyntax(1, "public static partial class TypesMap"));
             tree.Add(new LeftScopeSyntax(1));
             tree.Add(bindSystemFunc);
@@ -100,7 +103,7 @@ namespace HECSFramework.Core.Generator
         /// тут мы получаем все контейнеры для систем
         /// </summary>
         /// <returns></returns>
-        private ISyntax GetContaineresForSystems()
+        private ISyntax GetContaineresForSystems(TreeSyntaxNode usingSpaces)
         {
             var tree = new TreeSyntaxNode();
 
@@ -119,7 +122,7 @@ namespace HECSFramework.Core.Generator
 
                 foreach (var interfaceType in interfaceGenericCache)
                 {
-                    ProcessReacts(interfaceType, bindContainerBody, unbindContainer, system.Value);
+                    ProcessReacts(interfaceType, bindContainerBody, unbindContainer, system.Value, usingSpaces);
                 }
 
                 foreach (var systemPart in systemCasheParentsAndPartial)
@@ -175,7 +178,7 @@ namespace HECSFramework.Core.Generator
             return tree;
         }
 
-        private void ProcessReacts(LinkedGenericInterfaceNode part, ISyntax bindContainerBody, ISyntax unbindContainer, LinkedNode systemNode)
+        private void ProcessReacts(LinkedGenericInterfaceNode part, ISyntax bindContainerBody, ISyntax unbindContainer, LinkedNode systemNode, TreeSyntaxNode usingSpaces)
         {
             switch (part.BaseInterface.Name)
             {
@@ -191,11 +194,13 @@ namespace HECSFramework.Core.Generator
                 {
                     if (part.MultiArguments)
                     {
+                        usingSpaces.AddUnique(GetNamespaces(part.GenericNameSyntax));
                         bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddRequestProvider<{part.GenericNameSyntax.TypeArgumentList.Arguments[0]},{part.GenericNameSyntax.TypeArgumentList.Arguments[1]}>({CurrentSystem});"));
                         unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveRequestProvider<{part.GenericNameSyntax.TypeArgumentList.Arguments[0]},{part.GenericNameSyntax.TypeArgumentList.Arguments[1]}>({CurrentSystem});"));
                     }
                     else
                     {
+                        usingSpaces.AddUnique(GetNamespaces(part.GenericType));
                         bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddRequestProvider<{part.GenericType}>({CurrentSystem});"));
                         unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveRequestProvider<{part.GenericType}>({CurrentSystem});"));
                     }
@@ -1658,7 +1663,7 @@ namespace HECSFramework.Core.Generator
                     if (s is TypeArgumentListSyntax arguments)
                     {
                         foreach (var a in arguments.Arguments)
-                            currentUsings.Add(GetNamespaces(a.ToString()));
+                            currentUsings.AddUnique(GetNamespaces(a.ToString()));
                     }
 
                     if (s is IdentifierNameSyntax nameSyntax)
@@ -1735,6 +1740,26 @@ namespace HECSFramework.Core.Generator
             return (false, null);
         }
 
+        private ISyntax GetNamespaces(GenericNameSyntax genericNameSyntax)
+        {
+            var tree = new TreeSyntaxNode();
+
+            tree.AddUnique(GetNamespaces(genericNameSyntax.Identifier.Text));
+
+            foreach (var t in genericNameSyntax.TypeArgumentList.Arguments)
+            {
+                if (t is IdentifierNameSyntax identifier)
+                {
+                    tree.AddUnique(GetNamespaces(identifier.ToString()));
+                }
+                else if (t is GenericNameSyntax generic)
+                {
+                   tree.AddUnique(GetNamespaces(generic));
+                }
+            }
+            return tree;
+        }
+
         private ISyntax GetNamespaces(string nameOfNode, bool isInterface = false)
         {
             var tree = new TreeSyntaxNode();
@@ -1742,7 +1767,7 @@ namespace HECSFramework.Core.Generator
             var classes = Program.classes.Where(x => x.Identifier.ValueText == nameOfNode).ToList();
             var structs = Program.structs.Where(x => x.Identifier.ValueText == nameOfNode).ToList();
             var interfaces = Program.interfaces.Where(x => x.Identifier.ValueText == nameOfNode).ToList();
-
+          
             var need = new List<TypeDeclarationSyntax>();
             need.AddRange(classes);
             need.AddRange(structs);
@@ -1765,6 +1790,12 @@ namespace HECSFramework.Core.Generator
 
             foreach (var c in need)
             {
+                if (c.Parent is NamespaceDeclarationSyntax namespaceDec)
+                {
+                    tree.Add(new UsingSyntax(namespaceDec.Name.ToString()));
+                    continue;
+                }
+
                 var childNodes = c.ChildNodes();
 
                 foreach (var child in childNodes)
