@@ -32,6 +32,9 @@ namespace RoslynHECS.Helpers
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void AddUnique(this ISyntax syntax, ISyntax add)
         {
+            if (add == null || add.Tree == null)
+                return;
+
             foreach (var s in add.Tree)
             {
                 if (syntax.Tree.Any(t => t.ToString() == s.ToString()))
