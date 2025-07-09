@@ -58,6 +58,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(new UsingSyntax("System"));
             //tree.Add(new UsingSyntax("Systems"));
             tree.Add(new UsingSyntax("Components"));
+            tree.Add(new UsingSyntax("UnityEngine"));
             tree.Add(new UsingSyntax("Cysharp.Threading.Tasks"));
             tree.Add(usingSpaces);
             //tree.Add(new UsingSyntax("Commands", 1));
