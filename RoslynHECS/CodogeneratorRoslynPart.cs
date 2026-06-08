@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.AccessControl;
 using HECSFramework.Core.Helpers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -184,6 +185,21 @@ namespace HECSFramework.Core.Generator
             switch (part.BaseInterface.Name)
             {
                 case IReactCommand:
+
+                    //это костыль для дженерик систем с командами, возможно стоит отдельный модуль при обработке систем выделить и наполнение линкед ноды
+                    if (systemNode.Parent != null && systemNode.Parent.IsGeneric && part.GenericType == "T")
+                    {
+                       var nodes = systemNode.ClassDeclaration.BaseList.DescendantNodes();
+
+                        foreach (var n in nodes)
+                        {
+                            if (n is GenericNameSyntax generic)
+                            {
+                                part.GenericType = generic.TypeArgumentList.Arguments[0].ToString(); 
+                            }
+                        }
+                    }
+
                     bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"LocalCommandListener<{part.GenericType}>.AddListener(currentSystem.Owner.World.Index,{CurrentSystem});"));
                     unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"LocalCommandListener<{part.GenericType}>.RemoveListener(currentSystem.Owner.WorldId, system);"));
                     break;
