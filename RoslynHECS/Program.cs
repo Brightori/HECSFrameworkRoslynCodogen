@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -54,16 +54,15 @@ namespace RoslynHECS
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
         //public static string HECSGenerated = @"E:\repos\Kefir\minilife-server\MinilifeServer\HECSGenerated\";
 
-        private const string TypeProvider = "TypeProvider.cs";
-        private const string MaskProvider = "MaskProvider.cs";
         private const string HecsMasks = "HECSMasks.cs";
-        private const string SystemBindings = "SystemBindings.cs";
-        private const string ComponentContext = "ComponentContext.cs";
         private const string BluePrintsProvider = "BluePrintsProvider.cs";
-        private const string Documentation = "Documentation.cs";
+        private const string CommandsMap = "CommandsMap.cs";
+
+        //имена легаси-монолитов: сами генераторы удалены, имена нужны только для зачистки
+        private const string TypeProvider = "TypeProvider.cs";
+        private const string SystemBindings = "SystemBindings.cs";
         private const string MapResolver = "MapResolver.cs";
         private const string CustomAndUniversalResolvers = "CustomAndUniversalResolvers.cs";
-        private const string CommandsMap = "CommandsMap.cs";
 
         private const string ComponentsBluePrintsPath = "/Scripts/BluePrints/ComponentsBluePrints/";
         private const string SystemsBluePrintsPath = "/Scripts/BluePrints/SystemsBluePrint/";
@@ -77,6 +76,10 @@ namespace RoslynHECS
         private static bool resolversNeeded = true;
         private static bool bluePrintsNeeded = true;
         private static bool commandMapneeded = false;
+        private static bool forceRebuild = false;
+
+        private static int savedFilesCount = 0;
+        private static int skippedFilesCount = 0;
 
         public static bool CommandMapNeeded => commandMapneeded;
 
@@ -93,7 +96,7 @@ namespace RoslynHECS
             Console.WriteLine($"Путь: {ScriptsPath}");
             Console.WriteLine($"Путь кодогена: {HECSGenerated}");
             Console.WriteLine($"Найдены аргументы запуска: {string.Join(", ", args)}");
-            Console.WriteLine($"Доступные аргументы: {Environment.NewLine}{string.Join(Environment.NewLine, new[] { "path:путь_до_скриптов", "no_blueprints", "no_resolvers", "no_commands", "server" })}");
+            Console.WriteLine($"Доступные аргументы: {Environment.NewLine}{string.Join(Environment.NewLine, new[] { "path:путь_до_скриптов", "no_blueprints", "no_resolvers", "no_commands", "server", "force_rebuild" })}");
 
             var test = Directory.GetDirectories(ScriptsPath);
 
@@ -225,37 +228,78 @@ namespace RoslynHECS
             bluePrintsNeeded = !args.Any(a => a.Contains("no_blueprints"));
             resolversNeeded = !args.Any(a => a.Contains("no_resolvers"));
             commandMapneeded = !args.Any(a => a.Contains("no_commands"));
+            forceRebuild = args.Any(a => a.Contains("force_rebuild"));
         }
 
         private static void SaveFiles()
         {
+            var timer = System.Diagnostics.Stopwatch.StartNew();
             var processGeneration = new CodeGenerator();
-            SaveToFile(TypeProvider, processGeneration.GenerateTypesMapRoslyn(), HECSGenerated);
-            //SaveToFile(MaskProvider, processGeneration.GenerateMaskProviderRoslyn(), HECSGenerated);
-            SaveToFile(SystemBindings, processGeneration.GetSystemBindsByRoslyn(), HECSGenerated);
-            //SaveToFile(ComponentContext, processGeneration.GetComponentContextRoslyn(), HECSGenerated);
-            SaveToFile(HecsMasks, processGeneration.GenerateHecsMasksRoslyn(), HECSGenerated);
-            //SaveToFile(Documentation, processGeneration.GetDocumentationRoslyn(), HECSGenerated); не получается нормально автоматизировать, слишком сложные параметры у атрибута
 
-            SaveToFile("ComponentsWorldPart.cs", processGeneration.GetEntitiesWorldPart(), HECSGenerated);
+            var containersPath = HECSGenerated + @"Containers" + Path.DirectorySeparatorChar;
+            var resolversPath = HECSGenerated + @"Resolvers" + Path.DirectorySeparatorChar;
+            var fastProvidersPath = HECSGenerated + @"FastComponentsProviders" + Path.DirectorySeparatorChar;
+
+            //force_rebuild — единственный механизм удаления осиротевших файлов:
+            //чистим директории генерата и пишем всё заново без сверки
+            if (forceRebuild)
+            {
+                Console.WriteLine("force_rebuild: очищаем директории генерата");
+                CleanDirectory(containersPath);
+                CleanDirectory(resolversPath);
+                CleanDirectory(fastProvidersPath);
+            }
+
+            //старые монолиты: в контейнерном режиме не генерируются и обязаны исчезнуть,
+            //иначе дублируют конструктор TypesProvider / словари биндингов
+            DeleteLegacyFile(HECSGenerated + TypeProvider);
+            DeleteLegacyFile(HECSGenerated + SystemBindings);
+            DeleteLegacyFile(HECSGenerated + "ComponentsWorldPart.cs");
+            DeleteLegacyFile(HECSGenerated + "FastWorldPart.cs");
+            DeleteLegacyFile(HECSGenerated + MapResolver);
+            DeleteLegacyFile(HECSGenerated + CustomAndUniversalResolvers);
+
+            SaveToFile(HecsMasks, processGeneration.GenerateHecsMasksRoslyn(), HECSGenerated);
+            SaveToFile("WorldRegistration.cs", processGeneration.GetWorldRegistrationRuntime(resolversNeeded), HECSGenerated);
+
+            //контейнеры: файл на тип, меняется только вместе со своим типом
+            foreach (var component in componentOverData.Values)
+            {
+                if (component.IsAbstract)
+                    continue;
+
+                SaveToFile($"{component.Name}.Container.cs", processGeneration.GetComponentContainer(component, resolversNeeded), containersPath);
+            }
+
+            foreach (var system in systemOverData.Values)
+            {
+                if (system.IsAbstract)
+                    continue;
+
+                SaveToFile($"{system.Name}.Container.cs", processGeneration.GetSystemContainerFile(system), containersPath);
+            }
 
             if (resolversNeeded)
             {
-                var path = HECSGenerated + @"Resolvers\";
-                var fastProvidersPath = HECSGenerated + @"FastComponentsProviders\";
                 var resolvers = processGeneration.GetSerializationResolvers();
-                var fastComponents = processGeneration.GetProvidersForFastComponent();
-                SaveToFile(MapResolver, processGeneration.GetResolverMap(), HECSGenerated);
-                SaveToFile(CustomAndUniversalResolvers, processGeneration.GetCustomResolversMap(), HECSGenerated);
-                SaveToFile("FastWorldPart.cs", processGeneration.GetFastWorldPart(), HECSGenerated);
+                var fastComponentProviders = processGeneration.GetProvidersForFastComponent();
 
-                CleanDirectory(path);
+                SaveToFile("ResolversMapRuntime.cs", processGeneration.GetResolversMapRuntime(), HECSGenerated);
 
                 foreach (var c in resolvers)
-                    SaveToFile(c.name, c.content, path);
+                    SaveToFile(c.name, c.content, resolversPath);
 
-                foreach (var c in fastComponents)
+                foreach (var c in fastComponentProviders)
                     SaveToFile(c.fileName, c.data, fastProvidersPath);
+
+                foreach (var fastComponent in fastComponents)
+                    SaveToFile($"{fastComponent.Identifier.ValueText}.FastContainer.cs", processGeneration.GetFastComponentContainer(fastComponent), containersPath);
+
+                foreach (var customResolver in customHecsResolvers)
+                    SaveToFile($"{customResolver.Key}.CustomResolver.cs", processGeneration.GetCustomResolverRegistration(customResolver.Key, customResolver.Value), containersPath);
+
+                foreach (var universalResolver in hecsResolverCollection)
+                    SaveToFile($"{universalResolver.Value.Name}Resolver.cs", processGeneration.GetUniversalResolverFile(universalResolver.Value), resolversPath);
             }
 
             if (commandMapneeded)
@@ -300,6 +344,25 @@ namespace RoslynHECS
 
                 SaveToFile(BluePrintsProvider, processGeneration.GetBluePrintsProvider(), HECSGenerated, needToImport: true);
             }
+
+            timer.Stop();
+            Console.WriteLine($"генерация и запись: {timer.ElapsedMilliseconds}ms | записано файлов: {savedFilesCount} | без изменений (пропущено): {skippedFilesCount}");
+        }
+
+        private static void DeleteLegacyFile(string fullPath)
+        {
+            try
+            {
+                if (File.Exists(fullPath))
+                {
+                    File.Delete(fullPath);
+                    Console.WriteLine($"удалён легаси-файл генерата: {fullPath}");
+                }
+            }
+            catch
+            {
+                Console.WriteLine($"не смогли удалить легаси-файл: {fullPath}");
+            }
         }
 
         private static void CleanDirectory(string path)
@@ -328,7 +391,16 @@ namespace RoslynHECS
                 if (!Directory.Exists(pathToDirectory))
                     Directory.CreateDirectory(pathToDirectory);
 
+                //читаем всё — записываем только изменённое: диск (и компилятор за ним)
+                //видит лишь реальные изменения; force_rebuild пишет без сверки
+                if (!forceRebuild && File.Exists(path) && File.ReadAllText(path) == data)
+                {
+                    skippedFilesCount++;
+                    return;
+                }
+
                 File.WriteAllText(path, data);
+                savedFilesCount++;
             }
             catch
             {
@@ -340,7 +412,14 @@ namespace RoslynHECS
         {
             try
             {
+                if (!forceRebuild && File.Exists(fullPath) && File.ReadAllText(fullPath) == data)
+                {
+                    skippedFilesCount++;
+                    return;
+                }
+
                 File.WriteAllText(fullPath, data);
+                savedFilesCount++;
             }
             catch
             {

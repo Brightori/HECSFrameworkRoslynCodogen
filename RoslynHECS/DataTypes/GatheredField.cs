@@ -21,8 +21,8 @@ namespace HECSFramework.Core.Generator
 
         public GatheredField(MemberNode memberNode) : this()
         {
-            Type = SyntaxHelper.GetType(memberNode.MemberDeclarationSyntax);
-            FieldName = SyntaxHelper.GetFieldName(memberNode.MemberDeclarationSyntax);
+            Type = RoslynHECS.Helpers.SyntaxHelper.GetType(memberNode.MemberDeclarationSyntax);
+            FieldName = RoslynHECS.Helpers.SyntaxHelper.GetFieldName(memberNode.MemberDeclarationSyntax);
             Node = memberNode.MemberDeclarationSyntax;
 
             if (memberNode.Attributes.Count > 0)
