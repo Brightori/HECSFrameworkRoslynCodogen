@@ -950,11 +950,12 @@ namespace HECSFramework.Core.Generator
         {
             var tree = new TreeSyntaxNode();
 
-            var classes = Program.classes.Where(x => x.Identifier.ValueText == nameOfNode).ToList();
-            var structs = Program.structs.Where(x => x.Identifier.ValueText == nameOfNode).ToList();
-            var interfaces = Program.interfaces.Where(x => x.Identifier.ValueText == nameOfNode).ToList();
-          
-            var need = new List<TypeDeclarationSyntax>();
+            //индексы по имени вместо линейного скана всех типов проекта на каждый вызов
+            var classes = Program.GetClassDeclarations(nameOfNode);
+            var structs = Program.GetStructDeclarations(nameOfNode);
+            var interfaces = Program.GetInterfaceDeclarations(nameOfNode);
+
+            var need = new List<TypeDeclarationSyntax>(classes.Count + structs.Count);
             need.AddRange(classes);
             need.AddRange(structs);
             //need.AddRange(interfaces);
@@ -1012,7 +1013,8 @@ namespace HECSFramework.Core.Generator
 
         private string GetNameSpace(PropertyDeclarationSyntax field)
         {
-            var neededClass = Program.classes.FirstOrDefault(x => x.Identifier.ValueText == field.Identifier.ToString());
+            //classesByName хранит первое объявление, как и прежний FirstOrDefault по Program.classes
+            Program.classesByName.TryGetValue(field.Identifier.ToString(), out var neededClass);
             var namespaceString = string.Empty;
 
             if (neededClass == null)
@@ -1036,7 +1038,7 @@ namespace HECSFramework.Core.Generator
 
         private string GetNameSpace(FieldDeclarationSyntax field)
         {
-            var neededClass = Program.classes.FirstOrDefault(x => x.Identifier.ValueText == field.Declaration.Type.ToString());
+            Program.classesByName.TryGetValue(field.Declaration.Type.ToString(), out var neededClass);
             var namespaceString = string.Empty;
 
             if (neededClass == null)

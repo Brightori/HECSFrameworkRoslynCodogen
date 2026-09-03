@@ -1,10 +1,11 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using HECSFramework.Core;
 using HECSFramework.Core.Generator;
@@ -49,6 +50,16 @@ namespace RoslynHECS
         public static List<StructDeclarationSyntax> structs;
         public static List<InterfaceDeclarationSyntax> interfaces;
 
+        //индексы типов, строятся один раз после визиторов (BuildTypeIndexes):
+        //все объявления по имени (включая partial-части) и дети по базовому типу
+        public static Dictionary<string, List<ClassDeclarationSyntax>> classDeclarationsByName = new Dictionary<string, List<ClassDeclarationSyntax>>(4000);
+        public static Dictionary<string, List<StructDeclarationSyntax>> structDeclarationsByName = new Dictionary<string, List<StructDeclarationSyntax>>(4000);
+        public static Dictionary<string, List<InterfaceDeclarationSyntax>> interfaceDeclarationsByName = new Dictionary<string, List<InterfaceDeclarationSyntax>>(1024);
+        //ключ: базовый тип строкой как он записан в BaseList ("BaseComponent", "Foo<int>")
+        public static Dictionary<string, List<ClassDeclarationSyntax>> childrenByBase = new Dictionary<string, List<ClassDeclarationSyntax>>(4000);
+        //ключ: идентификатор generic-базы ("Foo" для ": Foo<int>")
+        public static Dictionary<string, List<ClassDeclarationSyntax>> childrenByGenericBase = new Dictionary<string, List<ClassDeclarationSyntax>>(512);
+
         public static string ScriptsPath = @"D:\Develop\StalkerSurviviorGitLab\Assets\";
         public static string HECSGenerated = @"D:\Develop\StalkerSurviviorGitLab\Assets\Scripts\HECSGenerated\";
         //public static string ScriptsPath = @"E:\repos\Kefir\minilife-server\MinilifeServer\";
@@ -80,6 +91,10 @@ namespace RoslynHECS
 
         private static int savedFilesCount = 0;
         private static int skippedFilesCount = 0;
+        private static int failedFilesCount = 0;
+
+        //SaveToFile только копит файлы, на диск они уходят параллельно в FlushFiles
+        private static readonly List<(string path, string data)> pendingFiles = new List<(string path, string data)>(2048);
 
         public static bool CommandMapNeeded => commandMapneeded;
 
@@ -99,23 +114,30 @@ namespace RoslynHECS
             Console.WriteLine($"Доступные аргументы: {Environment.NewLine}{string.Join(Environment.NewLine, new[] { "path:путь_до_скриптов", "no_blueprints", "no_resolvers", "no_commands", "server", "force_rebuild" })}");
 
             var test = Directory.GetDirectories(ScriptsPath);
+            var phaseTimer = System.Diagnostics.Stopwatch.StartNew();
 
             //var files = new DirectoryInfo(ScriptsPath).GetFiles("*.cs", SearchOption.AllDirectories);
             files = new DirectoryInfo(ScriptsPath).GetFiles("*.cs", SearchOption.AllDirectories).Where(x => !x.FullName.Contains("\\Plugins") && !x.FullName.Contains("\\HECSGenerated") && !x.FullName.Contains("\\MessagePack")).ToList();
             Console.WriteLine(files.Count);
 
-            var list = new ConcurrentBag<SyntaxTree>();
-            var tasks = new List<Task>(2048);
+            //порядок файлов фиксируем: от него зависит порядок классов, а значит содержимое
+            //монолитов (HECSMasks, BluePrintsProvider); ConcurrentBag давал случайный порядок
+            //и эти файлы переписывались на каждом прогоне
+            files.Sort((x, y) => string.CompareOrdinal(x.FullName, y.FullName));
+
+            var tasks = new List<Task<SyntaxTree>>(files.Count);
 
             foreach (var f in files)
             {
                 if (f.Extension == ".cs")
                 {
-                    tasks.Add(MakeTree(f, list));
+                    tasks.Add(MakeTree(f));
                 }
             }
 
-            await Task.WhenAll(tasks);
+            var list = await Task.WhenAll(tasks);
+            Console.WriteLine($"парсинг: {phaseTimer.ElapsedMilliseconds}ms");
+            phaseTimer.Restart();
 
             //foreach (var f in files)
             //{
@@ -132,21 +154,11 @@ namespace RoslynHECS
 
             Compilation = CSharpCompilation.Create("HelloWorld").AddSyntaxTrees(list);
 
+            CollectTypeDeclarations(list);
+            Console.WriteLine($"сбор типов: {phaseTimer.ElapsedMilliseconds}ms");
+            phaseTimer.Restart();
 
-            var classVisitor = new ClassVirtualizationVisitor();
-            var structVisitor = new StructVirtualizationVisitor();
-            var interfaceVisitor = new InterfaceVirtualizationVisitor();
-
-            foreach (var syntaxTree in list)
-            {
-                classVisitor.Visit(syntaxTree.GetRoot());
-                structVisitor.Visit(syntaxTree.GetRoot());
-                interfaceVisitor.Visit(syntaxTree.GetRoot());
-            }
-
-            classes = classVisitor.Classes;
-            structs = structVisitor.Structs;
-            interfaces = interfaceVisitor.Interfaces;
+            BuildTypeIndexes();
 
             foreach (var i in interfaces)
             {
@@ -166,8 +178,7 @@ namespace RoslynHECS
 
                 if (node.isPartial)
                 {
-                    var parts = interfaces.Where(x => x.Identifier.ValueText == name).ToHashSet();
-                    node.Parts = parts;
+                    node.Parts = interfaceDeclarationsByName[name].ToHashSet();
                 }
 
                 node.isHaveReact = name.Contains("React");
@@ -189,6 +200,7 @@ namespace RoslynHECS
                 c.Interfaces = newInterfaces;
             }
 
+            Console.WriteLine($"графы типов: {phaseTimer.ElapsedMilliseconds}ms");
             Console.WriteLine("components " + componentOverData.Count);
             Console.WriteLine("systems" + systemOverData.Count);
 
@@ -197,14 +209,132 @@ namespace RoslynHECS
             //Thread.Sleep(1500);
         }
 
-        private static async Task MakeTree(FileInfo f, ConcurrentBag<SyntaxTree> syntaxTrees)
+        /// <summary>
+        /// Собираем объявления классов, структур и интерфейсов одним проходом и только
+        /// по неймспейсам и типам: тела методов не материализуются, три полных обхода
+        /// CSharpSyntaxRewriter ушли. Деревья обрабатываются параллельно, результат
+        /// склеивается в порядке файлов, чтобы порядок типов был воспроизводим.
+        /// </summary>
+        private static void CollectTypeDeclarations(SyntaxTree[] trees)
+        {
+            var perTree = new List<TypeDeclarationSyntax>[trees.Length];
+
+            Parallel.For(0, trees.Length, i =>
+            {
+                var found = new List<TypeDeclarationSyntax>(8);
+                var root = trees[i].GetRoot();
+
+                foreach (var node in root.DescendantNodes(n => n is CompilationUnitSyntax || n is BaseNamespaceDeclarationSyntax || n is TypeDeclarationSyntax))
+                {
+                    if (node is TypeDeclarationSyntax type)
+                        found.Add(type);
+                }
+
+                perTree[i] = found;
+            });
+
+            classes = new List<ClassDeclarationSyntax>(2048);
+            structs = new List<StructDeclarationSyntax>(2048);
+            interfaces = new List<InterfaceDeclarationSyntax>(2048);
+
+            foreach (var found in perTree)
+            {
+                foreach (var type in found)
+                {
+                    switch (type)
+                    {
+                        case ClassDeclarationSyntax c:
+                            classes.Add(c);
+                            classesByName.TryAdd(c.Identifier.ValueText, c);
+                            break;
+                        case StructDeclarationSyntax s:
+                            structs.Add(s);
+                            break;
+                        case InterfaceDeclarationSyntax i:
+                            interfaces.Add(i);
+                            break;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Один проход по всем объявлениям вместо линейных сканов Program.classes на каждую ноду.
+        /// Порядок списков внутри словарей совпадает с порядком обхода визиторами.
+        /// </summary>
+        private static void BuildTypeIndexes()
+        {
+            foreach (var c in classes)
+            {
+                AddToIndex(classDeclarationsByName, c.Identifier.ValueText, c);
+
+                if (c.BaseList == null)
+                    continue;
+
+                foreach (var t in c.BaseList.Types)
+                {
+                    AddToIndex(childrenByBase, t.ToString(), c);
+
+                    if (t.Type is GenericNameSyntax generic)
+                        AddToIndex(childrenByGenericBase, generic.Identifier.ValueText, c);
+                }
+            }
+
+            foreach (var s in structs)
+                AddToIndex(structDeclarationsByName, s.Identifier.ValueText, s);
+
+            foreach (var i in interfaces)
+                AddToIndex(interfaceDeclarationsByName, i.Identifier.ValueText, i);
+        }
+
+        private static void AddToIndex<T>(Dictionary<string, List<T>> index, string key, T value)
+        {
+            if (!index.TryGetValue(key, out var list))
+            {
+                list = new List<T>(4);
+                index.Add(key, list);
+            }
+
+            list.Add(value);
+        }
+
+        public static IReadOnlyList<ClassDeclarationSyntax> GetClassDeclarations(string name)
+            => classDeclarationsByName.TryGetValue(name, out var list) ? list : Array.Empty<ClassDeclarationSyntax>();
+
+        public static IReadOnlyList<StructDeclarationSyntax> GetStructDeclarations(string name)
+            => structDeclarationsByName.TryGetValue(name, out var list) ? list : Array.Empty<StructDeclarationSyntax>();
+
+        public static IReadOnlyList<InterfaceDeclarationSyntax> GetInterfaceDeclarations(string name)
+            => interfaceDeclarationsByName.TryGetValue(name, out var list) ? list : Array.Empty<InterfaceDeclarationSyntax>();
+
+        //наследники по базовому типу: для generic-родителя ищем по идентификатору, иначе по строке
+        private static IReadOnlyList<ClassDeclarationSyntax> ChildrenOf(LinkedNode node)
+        {
+            var index = node.IsGeneric ? childrenByGenericBase : childrenByBase;
+            return index.TryGetValue(node.Name, out var list) ? list : Array.Empty<ClassDeclarationSyntax>();
+        }
+
+        private static IEnumerable<ClassDeclarationSyntax> ChildrenOfBases(params string[] baseNames)
+        {
+            foreach (var baseName in baseNames)
+            {
+                if (childrenByBase.TryGetValue(baseName, out var list))
+                {
+                    foreach (var c in list)
+                        yield return c;
+                }
+            }
+        }
+
+        private static async Task<SyntaxTree> MakeTree(FileInfo f)
         {
             var s = await File.ReadAllTextAsync(f.FullName);
             var syntaxTree = CSharpSyntaxTree.ParseText(s);
-            syntaxTrees.Add(syntaxTree);
 
             if (f.Name == CommandsMap)
                 alrdyHaveCommandMap = f;
+
+            return syntaxTree;
         }
 
         private static void CheckArgs(string[] args)
@@ -342,12 +472,78 @@ namespace RoslynHECS
                 foreach (var c in actionsAsyncBPs)
                     SaveToFile(c.Item1, c.Item2, ScriptsPath + ActionsBlueprints);
 
-                SaveToFile(BluePrintsProvider, processGeneration.GetBluePrintsProvider(), HECSGenerated, needToImport: true);
+                SaveToFile(BluePrintsProvider, processGeneration.GetBluePrintsProvider(), HECSGenerated);
             }
 
+            var generationMs = timer.ElapsedMilliseconds;
+            FlushFiles();
             timer.Stop();
-            Console.WriteLine($"генерация и запись: {timer.ElapsedMilliseconds}ms | записано файлов: {savedFilesCount} | без изменений (пропущено): {skippedFilesCount}");
+
+            Console.WriteLine($"генерация: {generationMs}ms | запись: {timer.ElapsedMilliseconds - generationMs}ms | записано файлов: {savedFilesCount} | без изменений (пропущено): {skippedFilesCount} | ошибок записи: {failedFilesCount}");
         }
+
+        /// <summary>
+        /// Пишем накопленные файлы параллельно: директории создаём заранее в одном потоке,
+        /// сверка с диском и запись идут по потокам, счётчики через Interlocked.
+        /// </summary>
+        private static void FlushFiles()
+        {
+            foreach (var directory in pendingFiles.Select(p => Path.GetDirectoryName(p.path)).Distinct())
+            {
+                try
+                {
+                    if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                        Directory.CreateDirectory(directory);
+                }
+                catch
+                {
+                    Console.WriteLine("we cant create directory " + directory);
+                }
+            }
+
+            Parallel.ForEach(pendingFiles, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, file =>
+            {
+                try
+                {
+                    if (!forceRebuild && IsSameOnDisk(file.path, file.data))
+                    {
+                        Interlocked.Increment(ref skippedFilesCount);
+                        return;
+                    }
+
+                    File.WriteAllText(file.path, file.data);
+                    Interlocked.Increment(ref savedFilesCount);
+                }
+                catch
+                {
+                    Interlocked.Increment(ref failedFilesCount);
+                    Console.WriteLine("we cant save file to " + file.path);
+                }
+            });
+
+            pendingFiles.Clear();
+        }
+
+        /// <summary>
+        /// Сравнение с диском без учёта переводов строк: генератор пишет "\r",
+        /// а IDE или Unity могут нормализовать файл, это не повод его перезаписывать.
+        /// Дешёвый отсев по длине в байтах делаем до чтения.
+        /// </summary>
+        private static bool IsSameOnDisk(string path, string data)
+        {
+            var info = new FileInfo(path);
+
+            if (!info.Exists)
+                return false;
+
+            if (info.Length == Encoding.UTF8.GetByteCount(data))
+                return File.ReadAllText(path) == data;
+
+            return NormalizeLineEndings(File.ReadAllText(path)) == NormalizeLineEndings(data);
+        }
+
+        private static string NormalizeLineEndings(string text)
+            => text.Replace("\r\n", "\n").Replace('\r', '\n');
 
         private static void DeleteLegacyFile(string fullPath)
         {
@@ -382,49 +578,16 @@ namespace RoslynHECS
             }
         }
 
-        private static void SaveToFile(string name, string data, string pathToDirectory, bool needToImport = false)
+        //читаем всё — записываем только изменённое: диск (и компилятор за ним)
+        //видит лишь реальные изменения; force_rebuild пишет без сверки (см. FlushFiles)
+        private static void SaveToFile(string name, string data, string pathToDirectory)
         {
-            var path = pathToDirectory + name;
-
-            try
-            {
-                if (!Directory.Exists(pathToDirectory))
-                    Directory.CreateDirectory(pathToDirectory);
-
-                //читаем всё — записываем только изменённое: диск (и компилятор за ним)
-                //видит лишь реальные изменения; force_rebuild пишет без сверки
-                if (!forceRebuild && File.Exists(path) && File.ReadAllText(path) == data)
-                {
-                    skippedFilesCount++;
-                    return;
-                }
-
-                File.WriteAllText(path, data);
-                savedFilesCount++;
-            }
-            catch
-            {
-                Console.WriteLine("we cant save file to " + pathToDirectory);
-            }
+            pendingFiles.Add((pathToDirectory + name, data));
         }
 
         private static void SaveToFileToFullPath(string data, string fullPath)
         {
-            try
-            {
-                if (!forceRebuild && File.Exists(fullPath) && File.ReadAllText(fullPath) == data)
-                {
-                    skippedFilesCount++;
-                    return;
-                }
-
-                File.WriteAllText(fullPath, data);
-                savedFilesCount++;
-            }
-            catch
-            {
-                Console.WriteLine("we cant save file to " + fullPath);
-            }
+            pendingFiles.Add((fullPath, data));
         }
 
 
@@ -623,7 +786,7 @@ namespace RoslynHECS
 
         private static void GatherComponents()
         {
-            var pureComponents = classes.Where(x => x.Identifier.ValueText != "BaseComponent" && x.BaseList != null && x.BaseList.Types.Any(z => z.ToString() == "BaseComponent" || z.ToString() == "IComponent"));
+            var pureComponents = ChildrenOfBases("BaseComponent", "IComponent").Where(x => x.Identifier.ValueText != "BaseComponent");
 
             foreach (var component in pureComponents)
             {
@@ -649,7 +812,7 @@ namespace RoslynHECS
                 if (componentOverData[name].IsPartial)
                 {
                     componentOverData[name].Parts.Add(componentOverData[name].ClassDeclaration);
-                    var parts = classes.Where(x => x.Identifier.ValueText == name);
+                    var parts = GetClassDeclarations(name);
 
                     foreach (var part in parts)
                     {
@@ -695,7 +858,7 @@ namespace RoslynHECS
 
         private static void GatherSystems()
         {
-            var pureSystems = classes.Where(x => x.Identifier.ValueText != "BaseSystem" && x.BaseList != null && x.BaseList.Types.Any(z => z.ToString() == "BaseSystem" || z.ToString() == "ISystem"));
+            var pureSystems = ChildrenOfBases("BaseSystem", "ISystem").Where(x => x.Identifier.ValueText != "BaseSystem");
 
             foreach (var sys in pureSystems)
             {
@@ -720,7 +883,7 @@ namespace RoslynHECS
 
                 if (systemOverData[name].IsPartial)
                 {
-                    var parts = classes.Where(x => x.Identifier.ValueText == name);
+                    var parts = GetClassDeclarations(name);
 
                     foreach (var part in parts)
                     {
@@ -765,16 +928,7 @@ namespace RoslynHECS
 
         private static void ProcessLinkNodesComponents(LinkedNode linkedNode)
         {
-            IEnumerable<ClassDeclarationSyntax> children = null;
-
-            if (linkedNode.IsGeneric)
-            {
-                children = classes.Where(x => x.BaseList != null && x.BaseList.Types.Any(z => z.Type is GenericNameSyntax nameSyntax && nameSyntax.Identifier.ValueText == linkedNode.Name));
-            }
-            else
-                children = classes.Where(x => x.BaseList != null && x.BaseList.Types.Any(z => z.ToString() == linkedNode.Name));
-
-            var neede = classes.FirstOrDefault(x => x.Identifier.ValueText == "BaseDefence");
+            var children = ChildrenOf(linkedNode);
 
             foreach (var component in children)
             {
@@ -799,7 +953,7 @@ namespace RoslynHECS
                 if (componentOverData[name].IsPartial)
                 {
                     componentOverData[name].Parts.Add(componentOverData[name].ClassDeclaration);
-                    var parts = classes.Where(x => x.Identifier.ValueText == name);
+                    var parts = GetClassDeclarations(name);
 
                     foreach (var part in parts)
                     {
@@ -836,14 +990,7 @@ namespace RoslynHECS
 
         private static void ProcessLinkNodes(LinkedNode linkedNode)
         {
-            IEnumerable<ClassDeclarationSyntax> children = null;
-
-            if (linkedNode.IsGeneric)
-            {
-                children = classes.Where(x => x.BaseList != null && x.BaseList.Types.Any(z => z.Type is GenericNameSyntax nameSyntax && nameSyntax.Identifier.ValueText == linkedNode.Name));
-            }
-            else
-                children = classes.Where(x => x.BaseList != null && x.BaseList.Types.Any(z => z.ToString() == linkedNode.Name));
+            var children = ChildrenOf(linkedNode);
 
             foreach (var sys in children)
             {
@@ -867,7 +1014,7 @@ namespace RoslynHECS
 
                 if (systemOverData[name].IsPartial)
                 {
-                    var parts = classes.Where(x => x.Identifier.ValueText == name);
+                    var parts = GetClassDeclarations(name);
 
                     foreach (var part in parts)
                     {
@@ -898,70 +1045,6 @@ namespace RoslynHECS
 
                 systemOverData[name].Parent = linkedNode;
                 ProcessLinkNodes(systemOverData[name]);
-            }
-        }
-
-        class ClassVirtualizationVisitor : CSharpSyntaxRewriter
-        {
-            public ClassVirtualizationVisitor()
-            {
-                Classes = new List<ClassDeclarationSyntax>(2048);
-            }
-
-            public List<ClassDeclarationSyntax> Classes { get; set; }
-
-            public override SyntaxNode VisitClassDeclaration(ClassDeclarationSyntax node)
-            {
-                base.VisitClassDeclaration(node);
-                Classes.Add(node); // save your visited classes
-
-                if (!Program.classesByName.ContainsKey(node.Identifier.ValueText))
-                {
-                    Program.classesByName.Add(node.Identifier.ValueText, node);
-                }
-
-                return node;
-            }
-        }
-
-        class StructVirtualizationVisitor : CSharpSyntaxRewriter
-        {
-            public StructVirtualizationVisitor()
-            {
-                Structs = new List<StructDeclarationSyntax>(2048);
-            }
-
-            public List<StructDeclarationSyntax> Structs { get; set; }
-
-            public override SyntaxNode VisitStructDeclaration(StructDeclarationSyntax node)
-            {
-                node = (StructDeclarationSyntax)base.VisitStructDeclaration(node);
-                Structs.Add(node); // save your visited classes
-                return node;
-            }
-        }
-
-        class InterfaceVirtualizationVisitor : CSharpSyntaxRewriter
-        {
-            public List<InterfaceDeclarationSyntax> Interfaces { get; set; }
-
-            public InterfaceVirtualizationVisitor()
-            {
-                Interfaces = new List<InterfaceDeclarationSyntax>(2048);
-            }
-
-            public override SyntaxNode Visit(SyntaxNode node)
-            {
-                if (node is InterfaceDeclarationSyntax inter)
-                    VisitInterfaceDeclaration(inter);
-
-                return base.Visit(node);
-            }
-
-            public override SyntaxNode VisitInterfaceDeclaration(InterfaceDeclarationSyntax node)
-            {
-                Interfaces.Add(node);
-                return base.VisitInterfaceDeclaration(node);
             }
         }
 
