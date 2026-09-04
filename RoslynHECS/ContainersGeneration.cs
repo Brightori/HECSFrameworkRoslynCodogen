@@ -33,7 +33,7 @@ namespace HECSFramework.Core.Generator
             if (withResolvers)
             {
                 usings.AddUnique(new UsingSyntax("MessagePack"));
-                usings.AddUnique(GetNamespaces(name));
+                AddNamespaces(usings, name);
                 usings.Add(new ParagraphSyntax());
 
                 //partial-объявления IData мержатся; ключ Union = TypeHashCode типа — стабилен и локален
@@ -43,7 +43,7 @@ namespace HECSFramework.Core.Generator
             }
             else
             {
-                usings.AddUnique(GetNamespaces(name));
+                AddNamespaces(usings, name);
                 usings.Add(new ParagraphSyntax());
             }
 
@@ -148,12 +148,13 @@ namespace HECSFramework.Core.Generator
             var tree = new TreeSyntaxNode();
             var usingSpaces = new TreeSyntaxNode();
 
-            //тот же набор, что был у SystemBindings.cs
-            tree.Add(new UsingSyntax("System"));
-            tree.Add(new UsingSyntax("Components"));
-            tree.Add(new UsingSyntax("Systems"));
-            tree.Add(new UsingSyntax("UnityEngine"));
-            tree.Add(new UsingSyntax("Cysharp.Threading.Tasks"));
+            //тот же набор, что был у SystemBindings.cs; кладём в usingSpaces, чтобы using
+            //из generic-аргументов реактов дедуплицировались с захардкоженными
+            usingSpaces.AddUnique(new UsingSyntax("System"));
+            usingSpaces.AddUnique(new UsingSyntax("Components"));
+            usingSpaces.AddUnique(new UsingSyntax("Systems"));
+            usingSpaces.AddUnique(new UsingSyntax("UnityEngine"));
+            usingSpaces.AddUnique(new UsingSyntax("Cysharp.Threading.Tasks"));
             tree.Add(usingSpaces);
             tree.Add(new UsingSyntax("System.Reflection", 1));
 
@@ -506,12 +507,8 @@ namespace HECSFramework.Core.Generator
             usings.AddUnique(new UsingSyntax("System"));
             usings.AddUnique(new UsingSyntax("System.Collections.Generic"));
 
-            if (Program.classesByName.TryGetValue(typeName, out var classNeeded)
-                && classNeeded.Parent is NamespaceDeclarationSyntax namespaceDeclaration)
-            {
-                usings.AddUnique(new UsingSyntax(namespaceDeclaration.Name.ToString()));
-            }
-
+            //тип может быть классом, структурой или enum'ом — единая таблица покрывает всё
+            AddNamespaces(usings, typeName);
             usings.Add(new ParagraphSyntax());
 
             tree.Add(new NameSpaceSyntax(DefaultNameSpace));

@@ -59,6 +59,8 @@ namespace RoslynHECS
         public static Dictionary<string, List<ClassDeclarationSyntax>> childrenByBase = new Dictionary<string, List<ClassDeclarationSyntax>>(4000);
         //ключ: идентификатор generic-базы ("Foo" для ": Foo<int>")
         public static Dictionary<string, List<ClassDeclarationSyntax>> childrenByGenericBase = new Dictionary<string, List<ClassDeclarationSyntax>>(512);
+        //неймспейсы по имени типа (классы, структуры, интерфейсы, enum'ы) — единый источник using в генерате
+        public static Dictionary<string, List<string>> namespacesByTypeName = new Dictionary<string, List<string>>(4000);
 
         public static string ScriptsPath = @"D:\Develop\StalkerSurviviorGitLab\Assets\";
         public static string HECSGenerated = @"D:\Develop\StalkerSurviviorGitLab\Assets\Scripts\HECSGenerated\";
@@ -217,16 +219,16 @@ namespace RoslynHECS
         /// </summary>
         private static void CollectTypeDeclarations(SyntaxTree[] trees)
         {
-            var perTree = new List<TypeDeclarationSyntax>[trees.Length];
+            var perTree = new List<BaseTypeDeclarationSyntax>[trees.Length];
 
             Parallel.For(0, trees.Length, i =>
             {
-                var found = new List<TypeDeclarationSyntax>(8);
+                var found = new List<BaseTypeDeclarationSyntax>(8);
                 var root = trees[i].GetRoot();
 
                 foreach (var node in root.DescendantNodes(n => n is CompilationUnitSyntax || n is BaseNamespaceDeclarationSyntax || n is TypeDeclarationSyntax))
                 {
-                    if (node is TypeDeclarationSyntax type)
+                    if (node is BaseTypeDeclarationSyntax type)
                         found.Add(type);
                 }
 
@@ -241,6 +243,8 @@ namespace RoslynHECS
             {
                 foreach (var type in found)
                 {
+                    RegisterNamespace(type);
+
                     switch (type)
                     {
                         case ClassDeclarationSyntax c:
@@ -257,6 +261,52 @@ namespace RoslynHECS
                 }
             }
         }
+
+        /// <summary>
+        /// Неймспейс типа для таблицы using. Вложенный тип по голому имени не адресуется,
+        /// using ему не поможет, поэтому вложенные и типы без неймспейса не регистрируются.
+        /// </summary>
+        private static void RegisterNamespace(BaseTypeDeclarationSyntax type)
+        {
+            if (type.Parent is BaseTypeDeclarationSyntax)
+                return;
+
+            var namespaceName = GetNamespaceName(type);
+
+            if (namespaceName == null)
+                return;
+
+            var typeName = type.Identifier.ValueText;
+
+            if (!namespacesByTypeName.TryGetValue(typeName, out var list))
+            {
+                list = new List<string>(1);
+                namespacesByTypeName.Add(typeName, list);
+            }
+
+            if (!list.Contains(namespaceName))
+                list.Add(namespaceName);
+        }
+
+        /// <summary>
+        /// Полное имя неймспейса: обычный, file-scoped (namespace X;) и вложенные
+        /// namespace A { namespace B { } } собираются подъёмом по родителям.
+        /// </summary>
+        private static string GetNamespaceName(SyntaxNode node)
+        {
+            string result = null;
+
+            for (var parent = node.Parent; parent != null; parent = parent.Parent)
+            {
+                if (parent is BaseNamespaceDeclarationSyntax ns)
+                    result = result == null ? ns.Name.ToString() : ns.Name.ToString() + "." + result;
+            }
+
+            return result;
+        }
+
+        public static IReadOnlyList<string> GetNamespacesOfType(string typeName)
+            => namespacesByTypeName.TryGetValue(typeName, out var list) ? list : Array.Empty<string>();
 
         /// <summary>
         /// Один проход по всем объявлениям вместо линейных сканов Program.classes на каждую ноду.

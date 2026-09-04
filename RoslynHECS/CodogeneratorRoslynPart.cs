@@ -76,13 +76,14 @@ namespace HECSFramework.Core.Generator
                 {
                     if (part.MultiArguments)
                     {
-                        usingSpaces.AddUnique(GetNamespaces(part.GenericNameSyntax));
+                        AddNamespacesForType(part.GenericNameSyntax, usingSpaces);
                         bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddRequestProvider<{part.GenericNameSyntax.TypeArgumentList.Arguments[0]},{part.GenericNameSyntax.TypeArgumentList.Arguments[1]}>({CurrentSystem});"));
                         unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveRequestProvider<{part.GenericNameSyntax.TypeArgumentList.Arguments[0]},{part.GenericNameSyntax.TypeArgumentList.Arguments[1]}>({CurrentSystem});"));
                     }
                     else
                     {
-                        usingSpaces.AddUnique(GetNamespaces(part.GenericType));
+                        //GenericType — строка (может быть и generic вида List<Foo>), разбираем её как тип
+                        AddNamespacesForType(SyntaxFactory.ParseTypeName(part.GenericType), usingSpaces);
                         bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.AddRequestProvider<{part.GenericType}>({CurrentSystem});"));
                         unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"system.Owner.World.RemoveRequestProvider<{part.GenericType}>({CurrentSystem});"));
                     }
@@ -463,6 +464,7 @@ namespace HECSFramework.Core.Generator
 
                         if (!string.IsNullOrEmpty(m.GatheredField.ResolverName))
                         {
+                            AddNamespaces(usings, m.GatheredField.ResolverName);
                             fields.Add(new TabSimpleSyntax(2, $"public {m.GatheredField.ResolverName} {m.GatheredField.FieldName};"));
                             saveBody.AddUnique(new TabSimpleSyntax(3, $"{Resolver.ToLower()}.{m.GatheredField.FieldName} = new {m.GatheredField.ResolverName}().In(ref {m.GatheredField.FieldName});"));
                             loadBody.AddUnique(new TabSimpleSyntax(3, $"{Resolver.ToLower()}.{m.GatheredField.FieldName}.Out(ref {m.GatheredField.FieldName});"));
@@ -524,6 +526,7 @@ namespace HECSFramework.Core.Generator
                     else
                     {
                         AddUniqueSyntax(usings, new UsingSyntax("HECSFramework.Serialize"));
+                        AddNamespaces(usings, f.ResolverName);
                         constructor.Add(new TabSimpleSyntax(3, $"this.{f.FieldName} = new {f.ResolverName}().In(ref {c.Name.ToLower()}.{f.FieldName});"));
                         outFunc.Add(new TabSimpleSyntax(3, $"this.{f.FieldName}.Out(ref {c.Name.ToLower()}.{f.FieldName});"));
                     }
@@ -582,109 +585,75 @@ namespace HECSFramework.Core.Generator
             return (false, -1, string.Empty);
         }
 
+        /// <summary>
+        /// using для типа поля или свойства резолвера. Составной тип разбирается целиком:
+        /// generic-аргументы, массивы, nullable, кортежи.
+        /// </summary>
         public static void GetNamespace(MemberDeclarationSyntax declaration, ISyntax tree)
         {
-            if (declaration is FieldDeclarationSyntax field)
+            switch (declaration)
             {
-                if (field.Declaration.Type is GenericNameSyntax generic)
-                {
-                    if (GetNameSpaceForCollection(generic.Identifier.Value.ToString(), out var namespaceCollection))
-                    {
-                        tree.AddUnique(new UsingSyntax(namespaceCollection));
-                    }
-
-                    foreach (var a in generic.TypeArgumentList.Arguments)
-                    {
-                        var arg = a.ToString();
-
-                        if (Program.structByName.TryGetValue(arg, out var value))
-                        {
-                            if (value.Parent != null && value.Parent is NamespaceDeclarationSyntax ns)
-                            {
-                                tree.AddUnique(new UsingSyntax(ns.Name.ToString()));
-                            }
-                        }
-
-                        if (Program.classesByName.TryGetValue(arg, out var classObject))
-                        {
-                            if (classObject.Parent != null && classObject.Parent is NamespaceDeclarationSyntax ns)
-                            {
-                                tree.AddUnique(new UsingSyntax(ns.Name.ToString()));
-                            }
-                        }
-                    }
-                }
-                else
-                {
-
-                    var arg = field.Declaration.Type.ToString();
-
-                    if (Program.structByName.TryGetValue(arg, out var value))
-                    {
-                        if (value.Parent != null && value.Parent is NamespaceDeclarationSyntax ns)
-                        {
-                            tree.AddUnique(new UsingSyntax(ns.Name.ToString()));
-                        }
-                    }
-
-                    if (Program.classesByName.TryGetValue(arg, out var classObject))
-                    {
-                        if (classObject.Parent != null && classObject.Parent is NamespaceDeclarationSyntax ns)
-                        {
-                            tree.AddUnique(new UsingSyntax(ns.Name.ToString()));
-                        }
-                    }
-                }
+                case FieldDeclarationSyntax field:
+                    AddNamespacesForType(field.Declaration.Type, tree);
+                    break;
+                case PropertyDeclarationSyntax property:
+                    AddNamespacesForType(property.Type, tree);
+                    break;
             }
+        }
 
-            if (declaration is PropertyDeclarationSyntax property)
+        /// <summary>
+        /// Единая точка сбора using по имени типа: неймспейсы берутся из таблицы Program
+        /// (классы, структуры, интерфейсы, enum'ы), каждый добавляется один раз.
+        /// Типы из внешних сборок (UnityEngine и т.п.) в таблице отсутствуют — для них
+        /// using либо захардкожен в шаблоне файла, либо тип обёрнут в свой резолвер.
+        /// </summary>
+        public static void AddNamespaces(ISyntax usings, string typeName)
+        {
+            foreach (var ns in Program.GetNamespacesOfType(typeName))
+                usings.AddUnique(new UsingSyntax(ns));
+        }
+
+        //TypeSyntax квалифицирован: в DSL генератора есть одноимённый класс
+        public static void AddNamespacesForType(Microsoft.CodeAnalysis.CSharp.Syntax.TypeSyntax type, ISyntax usings)
+        {
+            switch (type)
             {
+                case IdentifierNameSyntax identifier:
+                    AddNamespaces(usings, identifier.Identifier.ValueText);
+                    break;
 
+                case GenericNameSyntax generic:
+                    if (GetNameSpaceForCollection(generic.Identifier.ValueText, out var collectionNamespace))
+                        usings.AddUnique(new UsingSyntax(collectionNamespace));
+                    else
+                        AddNamespaces(usings, generic.Identifier.ValueText);
 
-                if (property.Type is GenericNameSyntax generic)
-                {
-                    foreach (var a in generic.TypeArgumentList.Arguments)
+                    foreach (var argument in generic.TypeArgumentList.Arguments)
+                        AddNamespacesForType(argument, usings);
+                    break;
+
+                case QualifiedNameSyntax qualified:
+                    //имя уже квалифицировано, using нужен только generic-аргументам справа
+                    if (qualified.Right is GenericNameSyntax rightGeneric)
                     {
-                        var arg = a.ToString();
-
-                        if (Program.structByName.TryGetValue(arg, out var value))
-                        {
-                            if (value.Parent != null && value.Parent is NamespaceDeclarationSyntax ns)
-                            {
-                                tree.AddUnique(new UsingSyntax(ns.Name.ToString()));
-                            }
-                        }
-
-                        if (Program.classesByName.TryGetValue(arg, out var classObject))
-                        {
-                            if (classObject.Parent != null && classObject.Parent is NamespaceDeclarationSyntax ns)
-                            {
-                                tree.AddUnique(new UsingSyntax(ns.Name.ToString()));
-                            }
-                        }
+                        foreach (var argument in rightGeneric.TypeArgumentList.Arguments)
+                            AddNamespacesForType(argument, usings);
                     }
-                }
-                else
-                {
+                    break;
 
-                    var arg = property.Type.ToString();
+                case ArrayTypeSyntax array:
+                    AddNamespacesForType(array.ElementType, usings);
+                    break;
 
-                    if (Program.structByName.TryGetValue(arg, out var value))
-                    {
-                        if (value.Parent != null && value.Parent is NamespaceDeclarationSyntax ns)
-                        {
-                            tree.AddUnique(new UsingSyntax(ns.Name.ToString()));
-                        }
-                    }
+                case NullableTypeSyntax nullable:
+                    AddNamespacesForType(nullable.ElementType, usings);
+                    break;
 
-                    if (Program.classesByName.TryGetValue(arg, out var classObject))
-                    {
-                        if (classObject.Parent != null && classObject.Parent is NamespaceDeclarationSyntax ns)
-                        {
-                            tree.AddUnique(new UsingSyntax(ns.Name.ToString()));
-                        }
-                    }
-                }
+                case TupleTypeSyntax tuple:
+                    foreach (var element in tuple.Elements)
+                        AddNamespacesForType(element.Type, usings);
+                    break;
             }
         }
 
@@ -734,90 +703,6 @@ namespace HECSFramework.Core.Generator
             return tree;
         }
 
-        public (bool isValid, string nameSpace) GetNameSpaceForCollection(PropertyDeclarationSyntax propertyDeclaration)
-        {
-            var result = (false, string.Empty);
-
-            var kind = propertyDeclaration.Type.Kind().ToString();
-
-            if (kind.Contains("Array") || kind.Contains("Dictionary") || kind.Contains("List"))
-            {
-                var collection = propertyDeclaration.Type.DescendantNodes().ToList();
-
-                foreach (var s in collection)
-                {
-                    if (s is IdentifierNameSyntax nameSyntax)
-                    {
-                        foreach (var cl in Program.classes)
-                        {
-                            if (cl.Identifier.ValueText.Contains(s.ToString()))
-                            {
-                                var nameSpace = cl.SyntaxTree.GetRoot().ChildNodes().FirstOrDefault(x => x is NamespaceDeclarationSyntax);
-
-                                if (nameSpace != null)
-                                {
-                                    foreach (var child in nameSpace.ChildNodes())
-                                    {
-                                        if (child is QualifiedNameSyntax nameSyntaxNamespace)
-                                        {
-                                            var checkedName = nameSyntaxNamespace.ToString();
-                                            if (checkedName == string.Empty || checkedName == "MessagePack.Resolvers")
-                                                continue;
-
-                                            return (true, checkedName);
-                                        }
-
-                                        if (child is IdentifierNameSyntax identifierName)
-                                        {
-                                            var checkedName = identifierName.ToString();
-                                            if (checkedName == string.Empty || checkedName == "MessagePack.Resolvers")
-                                                continue;
-
-                                            return (true, checkedName);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        foreach (var st in Program.structs)
-                        {
-                            if (st.Identifier.ValueText.Contains(s.ToString()))
-                            {
-                                var nameSpace = st.SyntaxTree.GetRoot().ChildNodes().FirstOrDefault(x => x is NamespaceDeclarationSyntax);
-
-                                if (nameSpace != null)
-                                {
-                                    foreach (var child in nameSpace.ChildNodes())
-                                    {
-                                        if (child is QualifiedNameSyntax nameSyntaxNamespace)
-                                        {
-                                            var checkedName = nameSyntaxNamespace.ToString();
-                                            if (checkedName == string.Empty || checkedName == "MessagePack.Resolvers")
-                                                continue;
-
-                                            return (true, checkedName);
-                                        }
-
-                                        if (child is IdentifierNameSyntax identifierName)
-                                        {
-                                            var checkedName = identifierName.ToString();
-                                            if (checkedName == string.Empty || checkedName == "MessagePack.Resolvers")
-                                                continue;
-
-                                            return (true, checkedName);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            return result;
-        }
-
         public static bool GetNameSpaceForCollection(string name, out string collectionNamespace)
         {
             if (name == "Array" || name == "Dictionary" || name == "List" || name == "Dictionary" || name == "HashSet")
@@ -828,245 +713,6 @@ namespace HECSFramework.Core.Generator
 
             collectionNamespace = string.Empty;
             return false;
-        }
-
-        public (bool isValid, ISyntax nameSpace) GetNameSpaceForCollection(FieldDeclarationSyntax field)
-        {
-            var kind = field.Declaration.Type.ToString();
-
-            if (kind.Contains("Array") || kind.Contains("Dictionary") || kind.Contains("List") || kind.Contains("MoveCommandInfo"))
-            {
-                var collection = field.Declaration.Type.DescendantNodes().ToList();
-                var currentUsings = new TreeSyntaxNode();
-
-                if (kind.Contains("Dictionary"))
-                {
-                    AddUniqueSyntax(currentUsings, new UsingSyntax("System.Collections.Generic"));
-                }
-
-                foreach (var s in collection)
-                {
-                    if (s is TypeArgumentListSyntax arguments)
-                    {
-                        foreach (var a in arguments.Arguments)
-                            currentUsings.AddUnique(GetNamespaces(a.ToString()));
-                    }
-
-                    if (s is IdentifierNameSyntax nameSyntax)
-                    {
-                        foreach (var cl in Program.classes)
-                        {
-                            if (cl.Identifier.ValueText.Contains(s.ToString()))
-                            {
-                                var nameSpace = cl.SyntaxTree.GetRoot().ChildNodes().FirstOrDefault(x => x is NamespaceDeclarationSyntax);
-
-                                if (nameSpace != null)
-                                {
-                                    foreach (var child in nameSpace.ChildNodes())
-                                    {
-                                        if (child is QualifiedNameSyntax nameSyntaxNamespace)
-                                        {
-                                            var checkedName = nameSyntaxNamespace.ToString();
-                                            if (checkedName == string.Empty || checkedName == "MessagePack.Resolvers")
-                                                continue;
-
-                                            currentUsings.Add(new UsingSyntax(checkedName));
-                                        }
-
-                                        if (child is IdentifierNameSyntax identifierName)
-                                        {
-                                            var checkedName = identifierName.ToString();
-                                            if (checkedName == string.Empty || checkedName == "MessagePack.Resolvers")
-                                                continue;
-
-                                            currentUsings.Add(new UsingSyntax(checkedName));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        foreach (var st in Program.structs)
-                        {
-                            if (st.Identifier.ValueText.Contains(s.ToString()))
-                            {
-                                var nameSpace = st.SyntaxTree.GetRoot().ChildNodes().FirstOrDefault(x => x is NamespaceDeclarationSyntax);
-
-                                if (nameSpace != null)
-                                {
-                                    foreach (var child in nameSpace.ChildNodes())
-                                    {
-                                        if (child is QualifiedNameSyntax nameSyntaxNamespace)
-                                        {
-                                            var checkedName = nameSyntaxNamespace.ToString();
-                                            if (checkedName == string.Empty || checkedName == "MessagePack.Resolvers")
-                                                continue;
-
-                                            currentUsings.Add(new UsingSyntax(checkedName));
-                                        }
-
-                                        if (child is IdentifierNameSyntax identifierName)
-                                        {
-                                            var checkedName = identifierName.ToString();
-                                            if (checkedName == string.Empty || checkedName == "MessagePack.Resolvers")
-                                                continue;
-
-                                            currentUsings.Add(new UsingSyntax(checkedName));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                return (true, currentUsings);
-            }
-
-            return (false, null);
-        }
-
-        private ISyntax GetNamespaces(GenericNameSyntax genericNameSyntax)
-        {
-            var tree = new TreeSyntaxNode();
-
-            tree.AddUnique(GetNamespaces(genericNameSyntax.Identifier.Text));
-
-            foreach (var t in genericNameSyntax.TypeArgumentList.Arguments)
-            {
-                if (t is IdentifierNameSyntax identifier)
-                {
-                    tree.AddUnique(GetNamespaces(identifier.ToString()));
-                }
-                else if (t is GenericNameSyntax generic)
-                {
-                   tree.AddUnique(GetNamespaces(generic));
-                }
-            }
-            return tree;
-        }
-
-        private ISyntax GetNamespaces(string nameOfNode, bool isInterface = false)
-        {
-            var tree = new TreeSyntaxNode();
-
-            //индексы по имени вместо линейного скана всех типов проекта на каждый вызов
-            var classes = Program.GetClassDeclarations(nameOfNode);
-            var structs = Program.GetStructDeclarations(nameOfNode);
-            var interfaces = Program.GetInterfaceDeclarations(nameOfNode);
-
-            var need = new List<TypeDeclarationSyntax>(classes.Count + structs.Count);
-            need.AddRange(classes);
-            need.AddRange(structs);
-            //need.AddRange(interfaces);
-
-            foreach (var i in interfaces)
-            {
-                if (i.Parent is NamespaceDeclarationSyntax nspace)
-                {
-                    if (nspace.Name is IdentifierNameSyntax identifier)
-                    {
-                        AddUniqueSyntax(tree, new UsingSyntax(identifier.ToString()));
-                    }
-                    else if (nspace.Name is QualifiedNameSyntax identifier2)
-                    {
-                        AddUniqueSyntax(tree, new UsingSyntax(identifier2.ToString()));
-                    }
-                }
-            }
-
-            foreach (var c in need)
-            {
-                if (c.Parent is NamespaceDeclarationSyntax namespaceDec)
-                {
-                    tree.Add(new UsingSyntax(namespaceDec.Name.ToString()));
-                    continue;
-                }
-
-                var childNodes = c.ChildNodes();
-
-                foreach (var child in childNodes)
-                {
-                    if (child is QualifiedNameSyntax nameSyntaxNamespace)
-                    {
-                        var checkedName = nameSyntaxNamespace.ToString();
-                        if (checkedName == string.Empty || checkedName == "MessagePack.Resolvers")
-                            continue;
-
-                        tree.Add(new UsingSyntax(checkedName));
-                    }
-
-                    if (child is IdentifierNameSyntax identifierName)
-                    {
-                        var checkedName = identifierName.ToString();
-                        if (checkedName == string.Empty || checkedName == "MessagePack.Resolvers")
-                            continue;
-
-                        tree.Add(new UsingSyntax(checkedName));
-                    }
-                }
-            }
-
-            return tree;
-        }
-
-
-        private string GetNameSpace(PropertyDeclarationSyntax field)
-        {
-            //classesByName хранит первое объявление, как и прежний FirstOrDefault по Program.classes
-            Program.classesByName.TryGetValue(field.Identifier.ToString(), out var neededClass);
-            var namespaceString = string.Empty;
-
-            if (neededClass == null)
-                return namespaceString;
-
-            var tree = neededClass.SyntaxTree.GetRoot().ChildNodes();
-
-            foreach (var cn in tree)
-            {
-                if (cn is NamespaceDeclarationSyntax declarationSyntax)
-                {
-                    var namespaceName = declarationSyntax.Name.ToString();
-                    namespaceString = namespaceName;
-                    break;
-                }
-            }
-
-            return namespaceString;
-        }
-
-
-        private string GetNameSpace(FieldDeclarationSyntax field)
-        {
-            Program.classesByName.TryGetValue(field.Declaration.Type.ToString(), out var neededClass);
-            var namespaceString = string.Empty;
-
-            if (neededClass == null)
-                return namespaceString;
-
-            var tree = neededClass.SyntaxTree.GetRoot().ChildNodes();
-
-            foreach (var cn in tree)
-            {
-                if (cn is NamespaceDeclarationSyntax declarationSyntax)
-                {
-                    var namespaceName = declarationSyntax.Name.ToString();
-                    namespaceString = namespaceName;
-                    break;
-                }
-            }
-
-            return namespaceString;
-        }
-
-        private string GetListNameSpace(FieldDeclarationSyntax field)
-        {
-            var namespaceString = string.Empty;
-
-            if (field.Declaration.Type.ToString().Contains("List"))
-                namespaceString = "System.Collections.Generic";
-
-            return namespaceString;
         }
 
         public (bool valid, int Order) IsValidProperty(PropertyDeclarationSyntax property)
@@ -1301,6 +947,7 @@ namespace HECSFramework.Core.Generator
                     else
                     {
                         AddUniqueSyntax(usings, new UsingSyntax("HECSFramework.Serialize"));
+                        AddNamespaces(usings, f.ResolverName);
                         constructor.Add(new TabSimpleSyntax(3, $"this.{f.FieldName} = new {f.ResolverName}().In(ref {c.Name.ToLower()}.{f.FieldName});"));
                         outFunc.Add(new TabSimpleSyntax(3, $"this.{f.FieldName}.Out(ref {c.Name.ToLower()}.{f.FieldName});"));
                     }
