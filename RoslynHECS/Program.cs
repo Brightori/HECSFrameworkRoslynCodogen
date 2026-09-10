@@ -10,11 +10,9 @@ using System.Threading.Tasks;
 using HECSFramework.Core;
 using HECSFramework.Core.Generator;
 using HECSFramework.Core.Helpers;
-using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.MSBuild;
 using RoslynHECS.DataTypes;
 using RoslynHECS.Helpers;
 using static HECSFramework.Core.Generator.CodeGenerator;
@@ -1095,44 +1093,6 @@ namespace RoslynHECS
 
                 systemOverData[name].Parent = linkedNode;
                 ProcessLinkNodes(systemOverData[name]);
-            }
-        }
-
-        private static VisualStudioInstance SelectVisualStudioInstance(VisualStudioInstance[] visualStudioInstances)
-        {
-            Console.WriteLine("Multiple installs of MSBuild detected please select one:");
-            for (int i = 0; i < visualStudioInstances.Length; i++)
-            {
-                Console.WriteLine($"Instance {i + 1}");
-                Console.WriteLine($"    Name: {visualStudioInstances[i].Name}");
-                Console.WriteLine($"    Version: {visualStudioInstances[i].Version}");
-                Console.WriteLine($"    MSBuild Path: {visualStudioInstances[i].MSBuildPath}");
-            }
-
-            while (true)
-            {
-                var userResponse = Console.ReadLine();
-                if (int.TryParse(userResponse, out int instanceNumber) &&
-                    instanceNumber > 0 &&
-                    instanceNumber <= visualStudioInstances.Length)
-                {
-                    return visualStudioInstances[instanceNumber - 1];
-                }
-                Console.WriteLine("Input not accepted, try again.");
-            }
-        }
-
-        private class ConsoleProgressReporter : IProgress<ProjectLoadProgress>
-        {
-            public void Report(ProjectLoadProgress loadProgress)
-            {
-                var projectDisplay = Path.GetFileName(loadProgress.FilePath);
-                if (loadProgress.TargetFramework != null)
-                {
-                    projectDisplay += $" ({loadProgress.TargetFramework})";
-                }
-
-                Console.WriteLine($"{loadProgress.Operation,-15} {loadProgress.ElapsedTime,-15:m\\:ss\\.fffffff} {projectDisplay}");
             }
         }
     }
