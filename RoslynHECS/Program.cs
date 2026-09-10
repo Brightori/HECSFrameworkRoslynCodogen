@@ -104,6 +104,12 @@ namespace RoslynHECS
         private static FileInfo alrdyHaveCommandMap;
         public static CSharpCompilation Compilation;
 
+        //код под #if без объявленного символа уходит в disabled trivia - типы и поля
+        //оттуда молча не попадают в генерат. По умолчанию символов нет: включение
+        //дефайна добавляет типы в componentsDeclarations и сдвигает биты масок,
+        //поэтому это осознанный аргумент запуска, а не поведение по умолчанию
+        private static CSharpParseOptions parseOptions = CSharpParseOptions.Default;
+
         static async Task Main(string[] args)
         {
             CheckArgs(args);
@@ -111,7 +117,7 @@ namespace RoslynHECS
             Console.WriteLine($"Путь: {ScriptsPath}");
             Console.WriteLine($"Путь кодогена: {HECSGenerated}");
             Console.WriteLine($"Найдены аргументы запуска: {string.Join(", ", args)}");
-            Console.WriteLine($"Доступные аргументы: {Environment.NewLine}{string.Join(Environment.NewLine, new[] { "path:путь_до_скриптов", "no_blueprints", "no_resolvers", "no_commands", "server", "force_rebuild" })}");
+            Console.WriteLine($"Доступные аргументы: {Environment.NewLine}{string.Join(Environment.NewLine, new[] { "path:путь_до_скриптов", "no_blueprints", "no_resolvers", "no_commands", "server", "force_rebuild", "defines:СИМВОЛ1;СИМВОЛ2" })}");
 
             var test = Directory.GetDirectories(ScriptsPath);
             var phaseTimer = System.Diagnostics.Stopwatch.StartNew();
@@ -247,7 +253,7 @@ namespace RoslynHECS
                     {
                         case ClassDeclarationSyntax c:
                             classes.Add(c);
-                            classesByName.TryAdd(c.Identifier.ValueText, c);
+                            RegisterClassByName(c);
                             break;
                         case StructDeclarationSyntax s:
                             structs.Add(s);
@@ -259,6 +265,34 @@ namespace RoslynHECS
                 }
             }
         }
+
+        /// <summary>
+        /// По этому словарю LinkedNodeHelper ищет родителя, а ключ у него - голое имя типа.
+        /// Два разных типа с одним именем словарь не разводит: второй молча теряется,
+        /// и наследник уезжает к чужому родителю вместе с его полями. Partial-части
+        /// одного типа приходят сюда несколько раз, это норма и о ней не сообщаем.
+        /// </summary>
+        private static void RegisterClassByName(ClassDeclarationSyntax c)
+        {
+            var name = c.Identifier.ValueText;
+
+            if (!classesByName.TryGetValue(name, out var alrdyHave))
+            {
+                classesByName.Add(name, c);
+                return;
+            }
+
+            var alrdyNamespace = GetNamespaceName(alrdyHave);
+            var currentNamespace = GetNamespaceName(c);
+
+            if (alrdyNamespace == currentNamespace)
+                return;
+
+            Console.WriteLine($"конфликт имён: {name} объявлен и в {NamespaceForLog(alrdyNamespace)}, и в {NamespaceForLog(currentNamespace)} - родителя наследники увидят только из первого");
+        }
+
+        private static string NamespaceForLog(string namespaceName)
+            => namespaceName ?? "глобальном неймспейсе";
 
         /// <summary>
         /// Неймспейс типа для таблицы using. Вложенный тип по голому имени не адресуется,
@@ -377,7 +411,7 @@ namespace RoslynHECS
         private static async Task<SyntaxTree> MakeTree(FileInfo f)
         {
             var s = await File.ReadAllTextAsync(f.FullName);
-            var syntaxTree = CSharpSyntaxTree.ParseText(s);
+            var syntaxTree = CSharpSyntaxTree.ParseText(s, parseOptions);
 
             if (f.Name == CommandsMap)
                 alrdyHaveCommandMap = f;
@@ -401,6 +435,15 @@ namespace RoslynHECS
                 HECSGenerated = server ? Path.Combine(ScriptsPath, "HECSGenerated") : Path.Combine(ScriptsPath, "Scripts", "HECSGenerated");
                 HECSGenerated = Path.GetFullPath(HECSGenerated);
                 if (!HECSGenerated.EndsWith(Path.DirectorySeparatorChar.ToString())) HECSGenerated += Path.DirectorySeparatorChar;
+            }
+
+            var defines = args.FirstOrDefault(a => a.StartsWith("defines:"))?.Replace("defines:", "");
+
+            if (!string.IsNullOrEmpty(defines))
+            {
+                var symbols = defines.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                parseOptions = CSharpParseOptions.Default.WithPreprocessorSymbols(symbols);
+                Console.WriteLine($"Дефайны парсера: {string.Join(", ", symbols)}");
             }
 
             bluePrintsNeeded = !args.Any(a => a.Contains("no_blueprints"));

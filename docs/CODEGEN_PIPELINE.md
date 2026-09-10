@@ -22,6 +22,7 @@ RoslynHECS.exe path:D:\MyProject\Assets\ no_resolvers no_commands
 | `no_blueprints` | `bluePrintsNeeded = false` |
 | `no_resolvers` | `resolversNeeded = false` |
 | `no_commands` | `commandMapneeded = false` |
+| `defines:A;B` | `parseOptions = CSharpParseOptions.Default.WithPreprocessorSymbols(...)`, разделители `;` и `,` |
 
 > ⚠️ **Ловушка.** При `args.Length == 0` метод делает ранний `return` до присвоения флагов. Поля остаются в своих инициализаторах: `resolversNeeded = true`, `bluePrintsNeeded = true`, **`commandMapneeded = false`**. То есть «запуск без аргументов» ≠ «запуск с `path:` без остальных флагов»: во втором случае `CommandsMap.cs` будет сгенерирован.
 
@@ -45,7 +46,9 @@ files = new DirectoryInfo(ScriptsPath)
 
 > Фильтр использует `\\` — это **Windows-специфично**. На macOS/Linux исключения не сработают.
 
-Каждый файл читается асинхронно и парсится: `CSharpSyntaxTree.ParseText(text)` → `ConcurrentBag<SyntaxTree>`. Попутно запоминается существующий `CommandsMap.cs` (`alrdyHaveCommandMap`) — чтобы позже перезаписать его **на месте**, а не создавать дубль.
+Каждый файл читается асинхронно и парсится: `CSharpSyntaxTree.ParseText(text, parseOptions)` → `ConcurrentBag<SyntaxTree>`. Попутно запоминается существующий `CommandsMap.cs` (`alrdyHaveCommandMap`) — чтобы позже перезаписать его **на месте**, а не создавать дубль.
+
+> Символов препроцессора по умолчанию нет: всё под `#if` — disabled trivia, типы и поля оттуда в генерат не попадают и никак себя не проявляют. Символы включаются аргументом `defines:`, но осознанно: новый видимый компонент встаёт в `componentsDeclarations` и сдвигает биты маски.
 
 Затем:
 

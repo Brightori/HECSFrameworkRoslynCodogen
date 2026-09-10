@@ -129,7 +129,7 @@ return tree.ToString();
 
 ```
 Main(args)
- ├─ CheckArgs(args)                       — path / no_blueprints / no_resolvers / no_commands / server
+ ├─ CheckArgs(args)                       — path / no_blueprints / no_resolvers / no_commands / server / defines
  ├─ GetFiles(*.cs, AllDirectories)        — исключая \Plugins, \HECSGenerated, \MessagePack
  ├─ Task.WhenAll(MakeTree)                — параллельный ParseText → ConcurrentBag<SyntaxTree>
  ├─ CSharpCompilation.Create("HelloWorld")

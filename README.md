@@ -35,6 +35,7 @@ dotnet run --project RoslynHECS -- path:/repo/Server/ server
 | `no_blueprints` | не генерировать blueprint'ы |
 | `no_resolvers` | не генерировать резолверы сериализации |
 | `no_commands` | не генерировать `CommandsMap.cs` |
+| `defines:A;B` | символы препроцессора для парсера: без них код под `#if` не виден генератору |
 
 > Нюанс: при запуске **вообще без аргументов** `CommandsMap.cs` не генерируется — см. [CODEGEN_PIPELINE.md §0](docs/CODEGEN_PIPELINE.md).
 

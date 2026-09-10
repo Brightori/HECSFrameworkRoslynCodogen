@@ -51,10 +51,11 @@ Standalone-кодогенератор на Roslyn для HECS Framework. Кон�
 - `CheckArgs` при пустом `args` делает ранний `return`. `commandMapneeded` инициализирован `false`, `resolversNeeded`/`bluePrintsNeeded` — `true`. Поэтому «без аргументов» и «с `path:`» дают разный набор файлов.
 - Хардкод путей в `Program.ScriptsPath` / `HECSGenerated` — на машину автора.
 - Фильтр исключений использует `"\\Plugins"` — Windows-only.
+- Парсинг идёт без символов препроцессора: код под `#if` не виден генератору, пока символы не переданы аргументом `defines:`.
 - `SaveToFile` глотает исключения, пишет `we cant save file to …` и продолжает.
 - `CleanDirectory` полностью вычищает `HECSGenerated/Resolvers/`.
 - В `SaveFiles` закомментированы `MaskProvider.cs`, `ComponentContext.cs`, `Documentation.cs` — код генераторов жив, но не вызывается.
-- `global.json` пинит SDK `3.1`, проект таргетит `net7.0`.
+- Проект таргетит `net9.0`, `global.json` в репозитории нет - берётся SDK по умолчанию.
 
 ## Проверка изменений
 
