@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
@@ -679,7 +679,7 @@ namespace RoslynHECS
                 {
                     foreach (var attr in a.Attributes)
                     {
-                        if (attr.Name.ToString().Contains(HECSManualResolver))
+                        if (attr.IsAttribute(HECSManualResolver))
                         {
                             var arguments = attr.ArgumentList.Arguments;
 
@@ -822,7 +822,7 @@ namespace RoslynHECS
                     {
                         foreach (var attr in a.Attributes)
                         {
-                            if (attr.ToString().Contains(HECSResolver))
+                            if (attr.IsAttribute(HECSResolver))
                             {
                                 var name = c.Identifier.ValueText;
                                 hecsResolverCollection.Add(c.Identifier.ValueText, LinkedNodeHelper.GetLinkedNode(c));

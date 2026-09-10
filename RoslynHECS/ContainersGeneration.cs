@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using RoslynHECS;
 using RoslynHECS.DataTypes;
@@ -227,7 +227,7 @@ namespace HECSFramework.Core.Generator
 
                 foreach (var attribute in attributes)
                 {
-                    if (attribute.Attributes.Any(x => x.ToString().Contains("Required")))
+                    if (attribute.Attributes.Any(x => x.IsAttribute("Required")))
                     {
                         if (attribute.Parent is FieldDeclarationSyntax field)
                         {
@@ -238,7 +238,7 @@ namespace HECSFramework.Core.Generator
                         }
                     }
 
-                    if (attribute.Attributes.Any(x => x.ToString().Contains("Single")))
+                    if (attribute.Attributes.Any(x => x.IsAttribute("Single")))
                     {
                         if (attribute.Parent is FieldDeclarationSyntax field)
                         {

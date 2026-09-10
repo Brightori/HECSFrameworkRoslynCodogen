@@ -6,6 +6,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using ClassDeclarationSyntax = Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax;
 
+using RoslynHECS.Helpers;
+
 namespace RoslynHECS.DataTypes
 {
     //we have members here
@@ -44,7 +46,7 @@ namespace RoslynHECS.DataTypes
             foreach (var p in linkedNode.Parts)
                 ProcessClass(p);
 
-            PartialSerializaion = ClassAttributes.Where(x => x.Name.ToString() == "PartialSerializeField").ToHashSet();
+            PartialSerializaion = ClassAttributes.Where(x => x.IsAttribute("PartialSerializeField")).ToHashSet();
 
             if (IsPartialSerialization)
             {

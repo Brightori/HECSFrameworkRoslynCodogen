@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.AccessControl;
@@ -373,7 +373,7 @@ namespace HECSFramework.Core.Generator
                     {
                         foreach (var attr in a.Attributes)
                         {
-                            if (attr.Name.ToString() == "HECSDefaultResolver")
+                            if (attr.IsAttribute("HECSDefaultResolver"))
                             {
                                 containersSolve.Add(c.ClassDeclaration);
                                 needContinue = true;
@@ -561,7 +561,7 @@ namespace HECSFramework.Core.Generator
             foreach (var a in fieldDeclarationSyntax.AttributeLists.SelectMany(x => x.Attributes).ToArray())
             {
                 //todo "разобраться аккуратно с аттрибутами поля"
-                if (a.Name.ToString() == ("Field") && fieldDeclarationSyntax.Modifiers.ToString().Contains("public"))
+                if (a.IsAttribute("Field") && fieldDeclarationSyntax.Modifiers.ToString().Contains("public"))
                 {
                     if (a.ArgumentList == null)
                         continue;
@@ -1381,7 +1381,7 @@ namespace HECSFramework.Core.Generator
             {
                 foreach (var a in attribute.Attributes)
                 {
-                    if (a.ToString().Contains(GenericNetworkCommand))
+                    if (a.IsAttribute(GenericNetworkCommand))
                     {
                         foreach (var dn in a.DescendantNodes())
                         {
@@ -1419,7 +1419,7 @@ namespace HECSFramework.Core.Generator
             {
                 foreach (var a in attribute.Attributes)
                 {
-                    if (a.ToString().Contains(GenericNetworkCommand))
+                    if (a.IsAttribute(GenericNetworkCommand))
                     {
                         foreach (var dn in a.DescendantNodes())
                         {

@@ -27,7 +27,7 @@ namespace HECSFramework.Core.Generator
 
             if (memberNode.Attributes.Count > 0)
             {
-                var needed = memberNode.Attributes.FirstOrDefault(x => x.Name.ToString() == "Field");
+                var needed = memberNode.Attributes.FirstOrDefault(x => x.IsAttribute("Field"));
 
                 if (needed != null)
                 {
