@@ -1278,9 +1278,9 @@ namespace HECSFramework.Core.Generator
                 shortIDs.Add(shortIDdata);
             }
 
-            shortIDs = shortIDs.OrderBy(x => x.Type).ToHashSet();
+            var orderedShortIDs = shortIDs.OrderBy(x => x.Type, StringComparer.Ordinal).ToList();
 
-            foreach (var i in shortIDs)
+            foreach (var i in orderedShortIDs)
             {
                 i.ShortId = count;
                 count++;
@@ -1292,7 +1292,7 @@ namespace HECSFramework.Core.Generator
             tree.Add(GetDictionaryHelper.GetDictionaryMethod("GetTypeCodeToShort", "int", "ushort", 2, out var typeCodeToShort));
             tree.Add(GetDictionaryHelper.GetDictionaryMethod("GetComponentProviders", "int", "ComponentSerializeProvider", 2, out var componentProviders));
 
-            foreach (var i in shortIDs)
+            foreach (var i in orderedShortIDs)
             {
                 typeToshortBody.Tree.Add(GetDictionaryHelper.DictionaryBodyRecord(4, $"typeof({i.Type})", i.ShortId.ToString()));
                 shortToTypeCodeBody.Tree.Add(GetDictionaryHelper.DictionaryBodyRecord(4, i.ShortId.ToString(), i.TypeCode.ToString()));
