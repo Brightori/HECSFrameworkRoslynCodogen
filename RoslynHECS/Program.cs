@@ -92,6 +92,7 @@ namespace RoslynHECS
         private static int savedFilesCount = 0;
         private static int skippedFilesCount = 0;
         private static int failedFilesCount = 0;
+        private static int deletedOrphansCount = 0;
 
         //SaveToFile только копит файлы, на диск они уходят параллельно в FlushFiles
         private static readonly List<(string path, string data)> pendingFiles = new List<(string path, string data)>(2048);
@@ -461,8 +462,7 @@ namespace RoslynHECS
             var resolversPath = HECSGenerated + @"Resolvers" + Path.DirectorySeparatorChar;
             var fastProvidersPath = HECSGenerated + @"FastComponentsProviders" + Path.DirectorySeparatorChar;
 
-            //force_rebuild — единственный механизм удаления осиротевших файлов:
-            //чистим директории генерата и пишем всё заново без сверки
+            //force_rebuild: чистим директории генерата и пишем всё заново без сверки
             if (forceRebuild)
             {
                 Console.WriteLine("force_rebuild: очищаем директории генерата");
@@ -567,10 +567,57 @@ namespace RoslynHECS
             }
 
             var generationMs = timer.ElapsedMilliseconds;
+            var generatedFiles = new HashSet<string>(pendingFiles.Select(p => Path.GetFullPath(p.path)), PathComparer);
             FlushFiles();
+
+            if (resolversNeeded)
+                DeleteOrphans(new[] { containersPath, resolversPath, fastProvidersPath }, generatedFiles, _ => false);
+            else
+                DeleteOrphans(new[] { containersPath }, generatedFiles, IsResolversOnlyContainer);
+
             timer.Stop();
 
-            Console.WriteLine($"генерация: {generationMs}ms | запись: {timer.ElapsedMilliseconds - generationMs}ms | записано файлов: {savedFilesCount} | без изменений (пропущено): {skippedFilesCount} | ошибок записи: {failedFilesCount}");
+            Console.WriteLine($"генерация: {generationMs}ms | запись: {timer.ElapsedMilliseconds - generationMs}ms | записано файлов: {savedFilesCount} | без изменений (пропущено): {skippedFilesCount} | ошибок записи: {failedFilesCount} | удалено осиротевших: {deletedOrphansCount}");
+        }
+
+        private static StringComparer PathComparer
+            => OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
+
+        private static bool IsResolversOnlyContainer(string fileName)
+            => fileName.EndsWith(FastContainerSuffix + ".cs", StringComparison.Ordinal)
+            || fileName.EndsWith(ResolverContainerSuffix + ".cs", StringComparison.Ordinal);
+
+        private static void DeleteOrphans(string[] directories, HashSet<string> generatedFiles, Func<string, bool> keep)
+        {
+            foreach (var directory in directories)
+            {
+                var directoryInfo = new DirectoryInfo(directory);
+
+                if (!directoryInfo.Exists)
+                    continue;
+
+                foreach (var file in directoryInfo.GetFiles("*.cs"))
+                {
+                    if (!file.Name.EndsWith(".cs", StringComparison.Ordinal) || generatedFiles.Contains(file.FullName) || keep(file.Name))
+                        continue;
+
+                    try
+                    {
+                        file.Delete();
+
+                        var meta = file.FullName + ".meta";
+                        if (File.Exists(meta))
+                            File.Delete(meta);
+
+                        deletedOrphansCount++;
+                        Console.WriteLine($"удалён осиротевший файл генерата: {file.FullName}");
+                    }
+                    catch
+                    {
+                        Console.WriteLine($"не смогли удалить осиротевший файл: {file.FullName}");
+                    }
+                }
+            }
         }
 
         /// <summary>
