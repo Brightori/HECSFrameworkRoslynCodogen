@@ -841,6 +841,9 @@ namespace HECSFramework.Core.Generator
             usings.AddUnique(new UsingSyntax("MessagePack"));
             usings.AddUnique(new UsingSyntax("HECSFramework.Serialize"));
 
+            //универсальный резолвер ставится на любой тип (узлы стратегий и т.п.), его неймспейс заранее не известен
+            AddNamespaces(usings, name);
+
             tree.Add(new TabSimpleSyntax(1, "[MessagePackObject, Serializable]"));
             tree.Add(new TabSimpleSyntax(1, $"public partial struct {name + Resolver} : IResolver<{name + Resolver},{name}>, IData"));
             tree.Add(new LeftScopeSyntax(1));

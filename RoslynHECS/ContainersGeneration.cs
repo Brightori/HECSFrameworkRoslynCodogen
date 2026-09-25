@@ -36,8 +36,9 @@ namespace HECSFramework.Core.Generator
                 AddNamespaces(usings, name);
                 usings.Add(new ParagraphSyntax());
 
-                //partial-объявления IData мержатся; ключ Union = TypeHashCode типа — стабилен и локален
-                tree.Add(new TabSimpleSyntax(0, $"[Union({hash}, typeof({name}{Resolver}))]"));
+                //partial-объявления IData мержатся; ключ Union = TypeHashCode типа — стабилен и локален.
+                //атрибут стоит вне неймспейса, а резолвер живёт в DefaultNameSpace — имя только полное
+                tree.Add(new TabSimpleSyntax(0, $"[Union({hash}, typeof({DefaultNameSpace}.{name}{Resolver}))]"));
                 tree.Add(new TabSimpleSyntax(0, "public partial interface IData { }"));
                 tree.Add(new ParagraphSyntax());
             }
@@ -152,6 +153,7 @@ namespace HECSFramework.Core.Generator
             //из generic-аргументов реактов дедуплицировались с захардкоженными
             usingSpaces.AddUnique(new UsingSyntax("System"));
             usingSpaces.AddUnique(new UsingSyntax("Components"));
+            usingSpaces.AddUnique(new UsingSyntax("Commands"));
             usingSpaces.AddUnique(new UsingSyntax("Systems"));
             usingSpaces.AddUnique(new UsingSyntax("UnityEngine"));
             usingSpaces.AddUnique(new UsingSyntax("Cysharp.Threading.Tasks"));
