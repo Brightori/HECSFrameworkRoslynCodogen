@@ -268,86 +268,6 @@ namespace HECSFramework.Core.Generator
         #endregion
 
 
-        #region HECSMasks
-        public string GenerateHecsMasksRoslyn()
-        {
-            var tree = new TreeSyntaxNode();
-
-            tree.Add(new NameSpaceSyntax("HECSFramework.Core"));
-            tree.Add(new LeftScopeSyntax());
-            tree.Add(new TabSimpleSyntax(1, "public static partial class HMasks"));
-            tree.Add(new LeftScopeSyntax(1));
-            tree.Add(GetHecsMasksFieldsRoslyn());
-            tree.Add(GetHecsMasksConstructorRoslyn());
-            tree.Add(new RightScopeSyntax(1));
-            tree.Add(new RightScopeSyntax());
-
-            return tree.ToString();
-        }
-
-        private ISyntax GetNewComponentSolvedRoslyn(ClassDeclarationSyntax c, int index, int fieldCount)
-        {
-            var tree = new TreeSyntaxNode();
-            var maskBody = new TreeSyntaxNode();
-
-            tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(4, $"new {typeof(HECSMask).Name}"));
-            tree.Add(new LeftScopeSyntax(4));
-            tree.Add(maskBody);
-            tree.Add(new RightScopeSyntax(4, true));
-
-            maskBody.Add(new TabSimpleSyntax(5, $"Index = {index + 1},"));
-            maskBody.Add(new TabSimpleSyntax(5, $"TypeHashCode = {IndexGenerator.GenerateIndex(c.Identifier.ValueText)},"));
-            return tree;
-        }
-
-        private ISyntax GetHecsMasksConstructorRoslyn()
-        {
-            var tree = new TreeSyntaxNode();
-            tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(2, "static HMasks()"));
-            tree.Add(new LeftScopeSyntax(2));
-            tree.Add(GetHMaskBodyRoslyn());
-            tree.Add(new RightScopeSyntax(2));
-
-            return tree;
-        }
-
-        private ISyntax GetHMaskBodyRoslyn()
-        {
-            var tree = new TreeSyntaxNode();
-
-            for (int i = 0; i < Program.componentsDeclarations.Count; i++)
-            {
-                var className = Program.componentsDeclarations[i].Identifier.ValueText.ToLower();
-                var classType = Program.componentsDeclarations[i];
-                var hash = IndexGenerator.GetIndexForType(classType.Identifier.ValueText);
-                tree.Add(new TabSimpleSyntax(4, $"{className} = {GetNewComponentSolvedRoslyn(classType, i, ComponentsCountRoslyn())}"));
-            }
-
-            return tree;
-        }
-
-        private string GetHECSMaskNameRoslyn()
-        {
-            return typeof(HECSMask).Name;
-        }
-
-        private ISyntax GetHecsMasksFieldsRoslyn()
-        {
-            var tree = new TreeSyntaxNode();
-
-            var hecsMaskname = typeof(HECSMask).Name;
-
-            for (int i = 0; i < Program.componentsDeclarations.Count; i++)
-            {
-                tree.Add(new TabSimpleSyntax(2, $"private static {hecsMaskname} {Program.componentsDeclarations[i].Identifier.ValueText.ToLower()};"));
-                tree.Add(new TabSimpleSyntax(2, $"public static ref {hecsMaskname} {Program.componentsDeclarations[i].Identifier.ValueText} => ref {Program.componentsDeclarations[i].Identifier.ValueText.ToLower()};"));
-            }
-
-            return tree;
-        }
-        #endregion
 
 
 
@@ -1642,18 +1562,6 @@ namespace HECSFramework.Core.Generator
                 return;
 
             syntaxTo.Tree.Add(from);
-        }
-
-        private int ComponentsCountRoslyn()
-        {
-            double count = Program.componentsDeclarations.Count;
-
-            if (count == 0)
-                ++count;
-
-            var componentsPeriodCount = Math.Ceiling(count / 61);
-
-            return (int)componentsPeriodCount;
         }
         #endregion
     }

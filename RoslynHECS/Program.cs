@@ -479,10 +479,9 @@ namespace RoslynHECS
             DeleteLegacyFile(HECSGenerated + "FastWorldPart.cs");
             DeleteLegacyFile(HECSGenerated + MapResolver);
             DeleteLegacyFile(HECSGenerated + CustomAndUniversalResolvers);
+            DeleteLegacyFile(HECSGenerated + HecsMasks);
             DeleteLegacyFile(HECSGenerated + "WorldRegistration.cs");
             DeleteLegacyContainers(containersPath);
-
-            SaveToFile(HecsMasks, processGeneration.GenerateHecsMasksRoslyn(), HECSGenerated);
 
             //контейнеры: файл на тип, меняется только вместе со своим типом
             foreach (var component in componentOverData.Values)
