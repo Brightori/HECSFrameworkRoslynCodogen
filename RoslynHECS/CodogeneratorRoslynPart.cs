@@ -39,6 +39,7 @@ namespace HECSFramework.Core.Generator
         public const string IReactNetworkCommandLocal = "IReactNetworkCommandLocal";
         public const string GenericNetworkCommand = "GenericNetworkCommand";
         public const string IRequestProcessor = "IRequestProcessor";
+        public const string INetworkRequestProcessor = "INetworkRequestProcessor";
 
         private HashSet<LinkedInterfaceNode> interfaceCache = new HashSet<LinkedInterfaceNode>(64);
         private HashSet<LinkedGenericInterfaceNode> interfaceGenericCache = new HashSet<LinkedGenericInterfaceNode>(64);
@@ -126,6 +127,24 @@ namespace HECSFramework.Core.Generator
                         else
                             GetRequestContextResponseBody(part, bindContainerBody, unbindContainer, systemNode);
                         break;
+
+                    //сетевые запросы клиентского рантайма: обработчик регистрируется в статическом реестре мира,
+                    //без DataSenderSystem серверной реализации
+                    case INetworkRequestProcessor:
+                    {
+                        var processorTypes = part.MultiArguments
+                            ? $"{part.GenericNameSyntax.TypeArgumentList.Arguments[0]},{part.GenericNameSyntax.TypeArgumentList.Arguments[1]}"
+                            : part.GenericType;
+
+                        if (part.MultiArguments)
+                            AddNamespacesForType(part.GenericNameSyntax, usingSpaces);
+                        else
+                            AddNamespacesForType(SyntaxFactory.ParseTypeName(part.GenericType), usingSpaces);
+
+                        bindContainerBody.Tree.Add(new TabSimpleSyntax(3, $"NetworkRequestProcessors<{processorTypes}>.AddProcessor(currentSystem.Owner.World.Index, currentSystem);"));
+                        unbindContainer.Tree.Add(new TabSimpleSyntax(3, $"NetworkRequestProcessors<{processorTypes}>.RemoveProcessor(currentSystem.Owner.World.Index, currentSystem);"));
+                        break;
+                    }
                 }
             }
         }
