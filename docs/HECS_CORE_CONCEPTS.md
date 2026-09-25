@@ -2,7 +2,7 @@
 
 Краткая карта рантайма, ради которого существует генератор. Исходники — в сабмодуле `RoslynHECS/HECSCore/` (репозиторий [HECSFrameworkCore](https://github.com/Brightori/HECSFrameworkCore)).
 
-> Зачем это в документации генератора: чтобы генерировать корректный код, надо понимать контракты, которые он обязан соблюсти — `partial`-точки расширения, сигнатуры регистраторов и хеши типов.
+> Зачем это в документации генератора: чтобы генерировать корректный код, надо понимать контракты, которые он обязан соблюсти — `partial`-точки расширения, контракты контейнеров типов и хеши типов.
 
 ---
 
@@ -47,7 +47,7 @@ bool ContainsMask(FilterMask mask);
 bool ContainsAnyFromMask(HECSMultiMask mask);
 ```
 
-Два способа получить компонент — **осознанный выбор**: маска из `HMasks` (генерируется!) даёт O(1)-доступ, дженерик-версия ищет медленнее и предназначена для инициализации.
+Два способа получить компонент — **осознанный выбор**: по маске — O(1)-доступ, дженерик-версия ищет медленнее и предназначена для инициализации. Статических масок `HMasks` больше нет (не генерируются); маску типа выдаёт рантайм (`TypesMap`) после `TypesProvider.Build()`.
 
 ## Component
 
@@ -97,15 +97,11 @@ public abstract class BaseSystem : ISystem
 
 ## Mask
 
-`HECSMask` — битовая маска компонентов на нескольких `ulong`-полях + `TypeHashCode`.
+`HECSMask` — пара `Index` + `TypeHashCode`. `Index` назначает `TypesProvider.Build()` в рантайме по порядку регистрации контейнеров; он процессно-локален и наружу не уходит.
 `HECSMultiMask` — маска сущности (набор всех её компонентов).
-`ComponentMaskAndIndex` — пара `{ HECSMask ComponentsMask; string ComponentName; }`, элемент `TypesProvider.MapIndexes`.
+`ComponentMaskAndIndex` — пара `{ HECSMask ComponentsMask; string ComponentName; }`, элемент `TypesProvider.MapIndexes` (снаружи — `TypesMap.ComponentsInfo`).
 
-Генерируемый `HMasks` даёт статический доступ:
-
-```csharp
-entity.TryGetHecsComponent<HealthComponent>(HMasks.HealthComponent, out var health);
-```
+`HMasks` / `HECSMasks.cs` не генерируются; `HMaskDummy`, `MaskProvider`, `IMaskProvider` и `TypesMap.MaskProvider` из ядра удалены.
 
 ## Команды
 
@@ -121,7 +117,7 @@ public interface ICommand { }
 | `IGlobalCommand` | глобальная команда мира | `globalCommands` + `localCommands` |
 | `INetworkCommand` / `INetworkLocalCommand` | сетевая команда | `globalCommands` + `localCommands` + `networkCommands` |
 
-Реакция на команды со стороны систем — через дженерик-интерфейсы, которые генератор превращает в подписки в `SystemBindings.cs`:
+Реакция на команды со стороны систем — через дженерик-интерфейсы, которые генератор превращает в подписки в контейнере системы (`Containers/<X>Container.cs`):
 
 | Интерфейс системы | Подписка |
 |---|---|
@@ -148,21 +144,36 @@ IReactComponentGlobal<T>        // компонент типа T в этом м�
 
 ## World и регистрация типов
 
-`World` — `partial class`, и генератор дописывает ему две partial-точки:
+Регистрация идёт через **контейнеры типов**, без рефлексии. Контракты — `TypeContainers.cs`:
 
-| Метод | Файл генерата | Что заполняет |
-|---|---|---|
-| `partial void FillRegistrators()` | `ComponentsWorldPart.cs` | `componentProviderRegistrators = new ComponentProviderRegistrator[] { new ComponentProviderRegistrator<XComponent>(), … }` |
-| `partial void FillTypeRegistrators()` | `FastWorldPart.cs` | `typeRegistrators = new TypeRegistrator[] { new TypeRegistrator<XFastComponent>(), … }` |
+| Контракт | Что даёт |
+|---|---|
+| `ITypeContainer` | маркер |
+| `IComponentContainer : ITypeContainer` | `ComponentType`, `TypeHashCode`, `Factory()`, `RegisterWorld(World)` |
+| `ISystemContainer : ISystemSetter, ITypeContainer` | `SystemType`, `TypeHashCode`, `Factory()`, `BindSystem`/`UnBindSystem` |
+| `IFastComponentContainer : ITypeContainer` | `RegisterWorld(World)`, `UnRegisterWorld(World)` |
+| `IResolverContainer : ITypeContainer` | `RegisterResolvers(ResolversMap)` — объявлен в HECS.Serialize: ядро (оно же компилируется в генератор из форка HECSCore) не должно ссылаться на сериализацию |
 
-Аналогично `TypesProvider` (`Providers/TypesProvider.cs`) — partial-класс, конструктор которого генерируется в `TypeProvider.cs`.
+Сбор — рукописный `internal static partial class TypeContainersRegistry` (`Providers/TypeContainersRegistry.cs`). Каждый сгенерированный файл контейнера дописывает partial-часть со строкой `private static readonly bool <X>Container = Add(new <X>Container());`; инициализаторы всех частей выполняются в статическом конструкторе, итог — `TypeContainersRegistry.All`. Два правила, ломать нельзя:
+
+- у списка-накопителя **нет инициализатора поля** — инициализатор в части, скомпилированной позже, молча затрёт уже добавленные контейнеры;
+- **явный статический конструктор обязателен** — без него тип `beforefieldinit`, и CoreCLR вправе не выполнить инициализаторы.
+
+Дальше:
+
+- `TypesProvider` (рукописный, `Providers/TypesProviderRegistration.cs`) разбирает `TypeContainersRegistry.All` по контрактам и в `Build()` назначает индексы и маски; совпадение `TypeHashCode` у двух типов → `InvalidOperationException` с именами обоих.
+- `TypesMap` отдаёт `ComponentContainers`, `FastComponentContainers`, `ComponentsInfo`, `ComponentTypes`, `SystemTypes`, `GetContainers<T>()`.
+- `World` в конструкторе: `foreach (var container in TypesMap.ComponentContainers) container.RegisterWorld(this);` → `ComponentProvider<T>.RegisterWorld(world)`. `FastWorld` — так же по `FastComponentContainers` → `FastComponentProvider<T>.RegisterWorld` / `UnRegisterWorld`.
+- `ResolversMap` наполняется в `CollectRegistrations()` (генерируемый `ResolversMapRuntime.cs`) через `TypesMap.GetContainers<IResolverContainer>()`; контейнеры вызывают `internal` методы `RegisterResolver_<X>` / `RegisterCustom_<X>`.
+
+Удалены: `ComponentProviderRegistrator<T>`, `TypeRegistrator<T>`, `partial void FillRegistrators()` / `FillTypeRegistrators()`, генерируемый `WorldRegistration.cs`.
 
 ## Fast Components
 
 `IFastComponent` — **структурные** компоненты для «плотного» хранения. Генератор:
 
 - собирает их в `Program.fastComponents` (по base-list структуры),
-- регистрирует через `TypeRegistrator<T>` в `FastWorldPart.cs`,
+- регистрирует контейнером `Containers/<X>FastContainer.cs` (`IFastComponentContainer`),
 - создаёт Unity-провайдер `<X>FastProvider : FastComponentMonoProvider<X>` в `FastComponentsProviders/`.
 
 ## Global Update
@@ -203,8 +214,8 @@ IReactComponentGlobal<T>        // компонент типа T в этом м�
 Меняя генератор, проверьте эти инварианты:
 
 1. **Хеш типа.** `IndexGenerator.GetIndexForType(string)` — один алгоритм в генерате и в `BaseSystem.GetTypeHashCode`.
-2. **Раскладка маски.** Число `ulong`-полей (`ceil(N/61)`) и раскладка бит (`63` бита на поле) — должны соответствовать `HECSMask`.
-3. **Сигнатуры partial-методов.** `FillRegistrators()`, `FillTypeRegistrators()` — имена и модификаторы обязаны совпадать с объявлением в `World`.
-4. **Имена типов-обёрток.** `ComponentProviderRegistrator<T>`, `TypeRegistrator<T>`, `ComponentBluePrintContainer<T>`, `SystemBluePrint<T>`, `FastComponentMonoProvider<T>`, `ICommandResolver`, `ResolversMap`.
+2. **Реестр контейнеров.** Имена `TypeContainersRegistry` и `Add` — генерат дописывает в него строку на контейнер.
+3. **Контракты и точки входа.** `ITypeContainer`, `IComponentContainer`, `ISystemContainer`, `IFastComponentContainer`, `IResolverContainer`; статические `ComponentProvider<T>.RegisterWorld`, `FastComponentProvider<T>.RegisterWorld` / `UnRegisterWorld`; `ResolversMap.RegisterResolver_<X>` / `RegisterCustom_<X>`.
+4. **Имена типов-обёрток.** `ComponentBluePrintContainer<T>`, `SystemBluePrint<T>`, `FastComponentMonoProvider<T>`, `ICommandResolver`, `ResolversMap`.
 5. **Неймспейсы генерата.** `HECSFramework.Core` (ядро), `HECSFramework.Unity` (blueprints/провайдеры), `Components`, `Systems`, `Commands`.
 6. **`order` в `[Field]`** — контракт бинарного формата, не переиспользуется.

@@ -25,9 +25,9 @@ HECSFrameworkRoslynCodogen/
 RoslynHECS/
 ├── RoslynHECS.csproj           — net7.0, Exe, SelfContained, win-x64, PublishSingleFile, AllowUnsafeBlocks
 ├── Program.cs                  — 🚪 ТОЧКА ВХОДА: парсинг, сбор типов, запись файлов
-├── CodogeneratorRoslynPart.cs  — 🏭 ЯДРО ГЕНЕРАЦИИ (~3100 строк, partial class CodeGenerator)
-├── EntitiesWorld.cs            — генерация ComponentsWorldPart.cs (partial class World)
-├── FastWorldPart.cs            — генерация FastWorldPart.cs + провайдеров IFastComponent
+├── CodogeneratorRoslynPart.cs  — 🏭 ЯДРО ГЕНЕРАЦИИ (~1570 строк, partial class CodeGenerator)
+├── ContainersGeneration.cs     — генерация контейнеров типов (Containers/*.cs) и ResolversMapRuntime.cs
+├── FastWorldPart.cs            — генерация провайдеров IFastComponent
 ├── DataTypes/                  — модели данных генератора
 ├── Helpers/                    — утилиты работы с синтаксисом
 ├── Properties/                 — launchSettings.json + профили публикации (Windows / MacOs)
@@ -39,9 +39,9 @@ RoslynHECS/
 | Файл | Строк | Назначение |
 |---|---:|---|
 | `Program.cs` | ~1170 | `Main`, разбор аргументов, парсинг `.cs`-файлов целевого проекта, три Roslyn-визитора, построение графов наследования (`LinkedNode`, `LinkedInterfaceNode`, `LinkedGenericInterfaceNode`), `SaveFiles()` |
-| `CodogeneratorRoslynPart.cs` | ~3100 | Все генераторы: SystemBindings, TypesMap, HECSMasks, резолверы сериализации, BluePrints, CommandsMap/ShortID, Documentation |
-| `EntitiesWorld.cs` | 80 | `GetEntitiesWorldPart()` → `partial void FillRegistrators()` со списком `ComponentProviderRegistrator<T>` |
-| `FastWorldPart.cs` | 88 | `GetFastWorldPart()` → `partial void FillTypeRegistrators()`, плюс `<X>FastProvider.cs` для каждого `IFastComponent` |
+| `CodogeneratorRoslynPart.cs` | ~1570 | Биндинги систем (`ProcessReacts` и др. — тела для контейнеров систем), резолверы сериализации, BluePrints, CommandsMap/ShortID, Documentation |
+| `ContainersGeneration.cs` | ~460 | Контейнеры `Containers/<X>Container.cs` / `<X>FastContainer.cs` / `<X>ResolverContainer.cs` со строкой регистрации в `TypeContainersRegistry`, `ResolversMapRuntime.cs`, файлы универсальных резолверов |
+| `FastWorldPart.cs` | ~40 | `GetProvidersForFastComponent()` → `<X>FastProvider.cs` для каждого `IFastComponent` |
 
 ### `RoslynHECS/DataTypes/`
 
@@ -75,7 +75,7 @@ PublishProfiles/MacOs Profile.pubxml      — публикация под macOS
 
 Исходники рантайма HECS Framework (`https://github.com/Brightori/HECSFrameworkCore.git`).
 Генератор использует его двояко: как **библиотеку** (движок построения синтаксиса) и как
-**эталон типов** (`typeof(TypesProvider).Name`, `typeof(HECSMask).Name`, `IndexGenerator` и т.п.).
+**эталон типов** (`typeof(ICommand).Name`, `typeof(IGlobalCommand).Name`, `IndexGenerator` и т.п.).
 
 ### Критично для генератора
 
@@ -83,11 +83,12 @@ PublishProfiles/MacOs Profile.pubxml      — публикация под macOS
 |---|---|
 | `HECSGenerator/SyntaxTree.cs` | 🧱 DSL построения кода: `ISyntax`, `TreeSyntaxNode`, `TabSimpleSyntax`, `LeftScopeSyntax`, `RightScopeSyntax`, `UsingSyntax`, `NameSpaceSyntax`, `ParagraphSyntax`, `CompositeSyntax`, `SimpleSyntax`, `TabSpaceSyntax`, `ModificatorSyntax`, `FieldMember` |
 | `HECSGenerator/CParse.cs` | Константы языка (`LeftScope`, `Comma`, `Tab`, `Quote`, …), `ExtractModifier`, `GetObjectRecursive`, `FieldMembers.TryGetKnownType` |
-| `HECSGenerator/CodeGenerator.cs` | Вторая часть `partial class CodeGenerator` — reflection-ветка генерации (в Roslyn-режиме почти не используется, `StartGeneration()` закомментирован) |
+| `HECSGenerator/CodeGenerator.cs` | Ещё одна часть `partial class CodeGenerator` — урезана до `DefaultNameSpace`, `componentTypes`, `systems`, `Assembly`, `GatherAssembly()` (нужен меню документации); reflection-генерации больше нет |
 | `IndexGenerator.cs` | `GenerateIndex(string)` — детерминированный хеш имени типа → `TypeHashCode`. **Тот же алгоритм должен работать в рантайме** |
-| `HECSMask.cs`, `ComponentMaskAndIndex.cs` | Формат маски компонентов (ulong-битовые поля) |
-| `Providers/TypesProvider.cs`, `Providers/MaskProvider.cs` | Partial-классы, которые генератор дополняет |
-| `ComponentContext.cs` | Partial-класс контекста компонентов |
+| `HECSMask.cs`, `ComponentMaskAndIndex.cs` | Маска компонента: `Index` (назначается в рантайме) + `TypeHashCode` |
+| `TypeContainers.cs` | Контракты `ITypeContainer`, `IComponentContainer`, `ISystemContainer`, `IFastComponentContainer` — их реализуют генерируемые контейнеры |
+| `Providers/TypeContainersRegistry.cs` | Рукописный `internal static partial class TypeContainersRegistry`: генерат дописывает в него строку на контейнер, итог — `All` |
+| `Providers/TypesProvider.cs`, `Providers/TypesProviderRegistration.cs` | Рукописный `TypesProvider`: разбор контейнеров из реестра, `Build()` — индексы, маски, словари |
 
 ### Ядро рантайма (для понимания того, что генерируем)
 
@@ -123,15 +124,14 @@ PublishProfiles/MacOs Profile.pubxml      — публикация под macOS
 
 | Исходник генератора | Выходной файл(ы) |
 |---|---|
-| `CodogeneratorRoslynPart.GenerateTypesMapRoslyn` | `TypeProvider.cs` |
-| `CodogeneratorRoslynPart.GetSystemBindsByRoslyn` | `SystemBindings.cs` |
-| `CodogeneratorRoslynPart.GenerateHecsMasksRoslyn` | `HECSMasks.cs` |
-| `EntitiesWorld.GetEntitiesWorldPart` | `ComponentsWorldPart.cs` |
-| `FastWorldPart.GetFastWorldPart` | `FastWorldPart.cs` |
+| `ContainersGeneration.GetComponentContainer` | `Containers/<X>Container.cs` (компонент) |
+| `ContainersGeneration.GetSystemContainerFile` | `Containers/<X>Container.cs` (система) |
+| `ContainersGeneration.GetFastComponentContainer` | `Containers/<X>FastContainer.cs` |
+| `ContainersGeneration.GetCustomResolverRegistration` | `Containers/<X>ResolverContainer.cs` |
+| `ContainersGeneration.GetResolversMapRuntime` | `ResolversMapRuntime.cs` |
+| `ContainersGeneration.GetUniversalResolverFile` | `Resolvers/<X>Resolver.cs` (`[HECSResolver]`) |
 | `FastWorldPart.GetProvidersForFastComponent` | `FastComponentsProviders/<X>FastProvider.cs` |
 | `CodogeneratorRoslynPart.GetSerializationResolvers` | `Resolvers/<X>Resolver.cs` |
-| `CodogeneratorRoslynPart.GetResolverMap` | `MapResolver.cs` |
-| `CodogeneratorRoslynPart.GetCustomResolversMap` | `CustomAndUniversalResolvers.cs` |
 | `CodogeneratorRoslynPart.GenerateNetworkCommandsAndShortIdsMap` | `CommandsMap.cs` |
 | `CodogeneratorRoslynPart.Generate*BluePrints` / `Get*BluePrints` | BluePrints в `Assets/Scripts/BluePrints/...` |
 | `CodogeneratorRoslynPart.GetBluePrintsProvider` | `BluePrintsProvider.cs` |

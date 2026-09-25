@@ -36,7 +36,7 @@
                         ▼
 ┌──────────────────────────────────────────────────────────┐
 │  CodeGenerator (partial) — ГЕНЕРАТОРЫ                    │
-│  CodogeneratorRoslynPart.cs / EntitiesWorld.cs /         │
+│  CodogeneratorRoslynPart.cs / ContainersGeneration.cs /  │
 │  FastWorldPart.cs                                        │
 └───────────────────────┬──────────────────────────────────┘
                         │ строит дерево ISyntax
@@ -60,14 +60,14 @@ Dictionary<string, LinkedNode> componentOverData                    // граф 
 Dictionary<string, LinkedNode> systemOverData                       // граф систем
 Dictionary<string, LinkedInterfaceNode>        interfacesOverData   // граф интерфейсов
 Dictionary<string, LinkedGenericInterfaceNode> genericInterfacesOverData // IReactCommand<T> и пр.
-List<ClassDeclarationSyntax>  componentsDeclarations                // НЕабстрактные компоненты — порядок = индекс маски
+List<ClassDeclarationSyntax>  componentsDeclarations                // НЕабстрактные компоненты (blueprint'ы, BluePrintsProvider)
 List<StructDeclarationSyntax> globalCommands, localCommands, networkCommands, fastComponents
 Dictionary<string, ResolverData> customHecsResolvers
 Dictionary<string, LinkedNode>   hecsResolverCollection
 CSharpCompilation Compilation
 ```
 
-> ⚠️ `componentsDeclarations` — **упорядоченный список**. Позиция компонента в нём задаёт бит в `HECSMask` и индекс в `TypesProvider`. Порядок зависит от порядка обхода `componentOverData`, то есть от порядка файлов на диске. Добавление компонента может сдвинуть индексы остальных — поэтому сгенерированные данные несовместимы между сборками с разным набором компонентов (важно для сетевого протокола, см. ShortID).
+> ⚠️ Порядок `componentsDeclarations` **ничего не задаёт** в рантайме: индекс компонента и `HECSMask.Index` назначает `TypesProvider.Build()` по порядку регистрации контейнеров, они процессно-локальны. Наружу (сейвы, сеть) уходят только `TypeHashCode` и ShortID. ShortID нумеруются в `GetShortIdPart` по имени типа (`StringComparer.Ordinal`): новый сетевой тип сдвигает номера, поэтому клиент и сервер генерируются с одинаковым набором сетевых типов.
 
 ### Слой 2. Модель типов
 
@@ -93,15 +93,25 @@ CSharpCompilation Compilation
 Регионы в `CodogeneratorRoslynPart.cs`:
 
 ```
-#region SystemsBinding      → SystemBindings.cs
-#region ...TypesMap...      → TypeProvider.cs, HECSMasks.cs
-#region ComponentContext    → ComponentContext.cs (сейчас отключён)
-#region MaskProvider        → MaskProvider.cs (сейчас отключён)
-#region Resolvers           → Resolvers/*.cs, MapResolver.cs, CustomAndUniversalResolvers.cs
+#region SystemsBinding      → тела BindSystem/UnBindSystem для контейнеров систем (ProcessReacts)
+#region Resolvers           → Resolvers/*.cs
+#region CustomAndUniversalResolvers → тело универсального резолвера ([HECSResolver])
 #region ...BluePrints...    → BluePrints + BluePrintsProvider.cs
-#region CommandsMap         → CommandsMap.cs + ShortID
+#region CommandsResolvers   → CommandsMap.cs + ShortID
 #region Documentation       → Documentation.cs (сейчас отключён)
 ```
+
+Регионы в `ContainersGeneration.cs`:
+
+```
+#region ComponentContainer         → Containers/<X>Container.cs (компонент)
+#region SystemContainer            → Containers/<X>Container.cs (система)
+#region FastComponentContainer     → Containers/<X>FastContainer.cs
+#region ResolversMapRuntime        → ResolversMapRuntime.cs
+#region CustomResolverRegistration → Containers/<X>ResolverContainer.cs, Resolvers/<X>Resolver.cs ([HECSResolver])
+```
+
+Каждый файл контейнера дописывает partial-часть рукописного `TypeContainersRegistry` (ядро) одной строкой `private static readonly bool <X>Container = Add(new <X>Container());` — регистрация без рефлексии и без `[Preserve]`.
 
 ### Слой 4. DSL построения текста (`ISyntax`)
 
@@ -166,8 +176,8 @@ Main(args)
 
 - **Хардкод путей по умолчанию** — `Program.ScriptsPath` / `HECSGenerated` указывают на локальную машину автора. Без аргумента `path:` генератор пойдёт по несуществующему пути.
 - **`commandMapneeded` инициализируется в `false`**, а `CheckArgs` при **пустом** `args` делает ранний `return`. Значит без аргументов `CommandsMap.cs` не генерируется, а с любым аргументом (кроме `no_commands`) — генерируется. Флаги `resolversNeeded`/`bluePrintsNeeded` инициализированы `true`, поэтому у них поведение обратное.
-- **`Resolvers/` очищается целиком** (`CleanDirectory`) перед записью. Ручные правки там будут потеряны.
+- **`Containers/`, `Resolvers/`, `FastComponentsProviders/` очищаются целиком** (`CleanDirectory`) при `force_rebuild`. Ручные правки там будут потеряны; без флага перезаписываются только изменённые файлы, а осиротевшие (файлы типов, которых больше нет) удаляются каждый прогон.
 - **`SaveToFile` глотает исключения** — пишет `"we cant save file to ..."` в консоль и продолжает. Частичная генерация может пройти «успешно».
-- **Порядок компонентов = порядок битов маски.** Нет стабильного якоря (например, явного id), поэтому маски не переносимы между разными сборками проекта.
+- **Индекс компонента зависит от порядка регистрации**, а порядок инициализаторов partial-частей `TypeContainersRegistry` задаёт компилятор. Индексы и маски поэтому не переносимы между сборками — и не должны уходить наружу: стабильный якорь — `TypeHashCode` (совпадение хешей двух типов `Build()` отвергает `InvalidOperationException`).
 - **Матчинг по строкам** ломается на алиасах и полностью квалифицированных именах в base-list.
-- Часть генераторов отключена в `SaveFiles` (`MaskProvider`, `ComponentContext`, `Documentation`) — код в них жив, но не вызывается.
+- Генератор `Documentation` (`GetDocumentationRoslyn`) жив, но из `SaveFiles` не вызывается. Генераторов `MaskProvider` / `ComponentContext` больше нет.

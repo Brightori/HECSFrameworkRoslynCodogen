@@ -23,6 +23,7 @@ RoslynHECS.exe path:D:\MyProject\Assets\ no_resolvers no_commands
 | `no_resolvers` | `resolversNeeded = false` |
 | `no_commands` | `commandMapneeded = false` |
 | `defines:A;B` | `parseOptions = CSharpParseOptions.Default.WithPreprocessorSymbols(...)`, разделители `;` и `,` |
+| `force_rebuild` | `forceRebuild = true`: очистка директорий генерата и запись без сверки с диском (§8) |
 
 > ⚠️ **Ловушка.** При `args.Length == 0` метод делает ранний `return` до присвоения флагов. Поля остаются в своих инициализаторах: `resolversNeeded = true`, `bluePrintsNeeded = true`, **`commandMapneeded = false`**. То есть «запуск без аргументов» ≠ «запуск с `path:` без остальных флагов»: во втором случае `CommandsMap.cs` будет сгенерирован.
 
@@ -48,7 +49,7 @@ files = new DirectoryInfo(ScriptsPath)
 
 Каждый файл читается асинхронно и парсится: `CSharpSyntaxTree.ParseText(text, parseOptions)` → `ConcurrentBag<SyntaxTree>`. Попутно запоминается существующий `CommandsMap.cs` (`alrdyHaveCommandMap`) — чтобы позже перезаписать его **на месте**, а не создавать дубль.
 
-> Символов препроцессора по умолчанию нет: всё под `#if` — disabled trivia, типы и поля оттуда в генерат не попадают и никак себя не проявляют. Символы включаются аргументом `defines:`, но осознанно: новый видимый компонент встаёт в `componentsDeclarations` и сдвигает биты маски.
+> Символов препроцессора по умолчанию нет: всё под `#if` — disabled trivia, типы и поля оттуда в генерат не попадают и никак себя не проявляют. Символы включаются аргументом `defines:`, но осознанно: новый видимый сетевой тип сдвигает ShortID, а клиент и сервер должны генерироваться с одинаковым набором.
 
 Затем:
 
@@ -114,7 +115,7 @@ isHaveReact = Name.Contains("React")     // эвристика!
 
 Две вещи:
 
-1. **`componentsDeclarations`** — все **неабстрактные** компоненты. 🔑 Порядок в этом списке = индекс компонента в `TypesProvider` и номер бита в `HECSMask`.
+1. **`componentsDeclarations`** — все **неабстрактные** компоненты (идут в blueprint'ы и `BluePrintsProvider.cs`). Порядок в списке на индексы не влияет — их назначает рантайм (§10).
 2. Классы с атрибутом `[HECSResolver]` → `hecsResolverCollection` + запись в `customHecsResolvers` (`имя → имяResolver`).
 
 ---
@@ -136,28 +137,41 @@ isHaveReact = Name.Contains("React")     // эвристика!
 
 ## 8. `SaveFiles()` — что и куда пишется
 
+Файлы копятся в памяти и пишутся в конце параллельно (`FlushFiles`); файл, совпадающий с диском (без учёта переводов строк), не перезаписывается.
+
+Перед генерацией `SaveFiles` удаляет легаси-файлы: монолиты `TypeProvider.cs`, `SystemBindings.cs`, `ComponentsWorldPart.cs`, `FastWorldPart.cs`, `MapResolver.cs`, `CustomAndUniversalResolvers.cs`, `HECSMasks.cs`, `WorldRegistration.cs` и контейнеры со старыми именами `Containers/*.Container.cs`, `*.FastContainer.cs`, `*.CustomResolver.cs` (`DeleteLegacyContainers`).
+
+> 🧹 Каждый прогон после записи из `Containers/`, `Resolvers/`, `FastComponentsProviders/` удаляются все `.cs` (с `.meta`), которых этот прогон не породил; в прогоне с `no_resolvers` чистится только `Containers/`, а `*FastContainer.cs` / `*ResolverContainer.cs` не трогаются (`DeleteOrphans`, счётчик «удалено осиротевших» в итоговой строке). При `force_rebuild` эти директории **полностью очищаются** (`CleanDirectory`) и пишутся без сверки.
+
 ### 8.1 Всегда
+
+Файл на тип, имя файла = имя класса контейнера (без точек):
 
 | Файл | Метод | Что внутри |
 |---|---|---|
-| `HECSGenerated/TypeProvider.cs` | `GenerateTypesMapRoslyn()` | `partial class TypesProvider`: `Count`, `MapIndexes` (`Dictionary<int, ComponentMaskAndIndex>`), `TypeToComponentIndex`, `HashToType`, `TypeToHash`, `HECSFactory` |
-| `HECSGenerated/SystemBindings.cs` | `GetSystemBindsByRoslyn()` | контейнеры биндинга для каждой системы (см. §9) |
-| `HECSGenerated/HECSMasks.cs` | `GenerateHecsMasksRoslyn()` | `static partial class HMasks` — по паре полей на компонент: приватное `componentname` + `public static ref HECSMask ComponentName` |
-| `HECSGenerated/ComponentsWorldPart.cs` | `GetEntitiesWorldPart()` | `partial class World` → `partial void FillRegistrators()` с массивом `ComponentProviderRegistrator<T>` для всех неабстрактных компонентов |
+| `HECSGenerated/Containers/<X>Container.cs` (компонент) | `GetComponentContainer()` | строка регистрации в `TypeContainersRegistry` + `sealed class <X>Container : IComponentContainer` (`ComponentType`, `TypeHashCode`, `Factory()`, `RegisterWorld(world)` → `ComponentProvider<X>.RegisterWorld(world)`). При `resolversNeeded` ещё `IResolverContainer` (`RegisterResolvers(map)` → `map.RegisterResolver_<X>()`), partial `ResolversMap` с `internal void RegisterResolver_<X>()` и `[Union(TypeHashCode, …)]` на `IData` |
+| `HECSGenerated/Containers/<X>Container.cs` (система) | `GetSystemContainerFile()` | строка регистрации + `sealed class <X>Container : ISystemContainer` с `BindSystem`/`UnBindSystem` (см. §9) |
 
-Закомментированы в `SaveFiles`, но код генераторов жив: `MaskProvider.cs`, `ComponentContext.cs`, `Documentation.cs` (в комментарии автора: *«не получается нормально автоматизировать, слишком сложные параметры у атрибута»*).
+Строка регистрации — partial-часть рукописного `TypeContainersRegistry` (ядро):
+
+```csharp
+internal static partial class TypeContainersRegistry
+{
+    private static readonly bool HealthComponentContainer = Add(new HealthComponentContainer());
+}
+```
+
+`Documentation.cs` (`GetDocumentationRoslyn`) в `SaveFiles` не вызывается (в комментарии автора: *«не получается нормально автоматизировать, слишком сложные параметры у атрибута»*). Генераторов `MaskProvider.cs` / `ComponentContext.cs` больше нет.
 
 ### 8.2 Если `resolversNeeded`
 
 | Файл | Метод |
 |---|---|
-| `HECSGenerated/MapResolver.cs` | `GetResolverMap()` |
-| `HECSGenerated/CustomAndUniversalResolvers.cs` | `GetCustomResolversMap()` |
-| `HECSGenerated/FastWorldPart.cs` | `GetFastWorldPart()` — `partial void FillTypeRegistrators()` с `TypeRegistrator<T>` для каждого `IFastComponent` |
-| `HECSGenerated/Resolvers/<X>Resolver.cs` | `GetSerializationResolvers()` |
+| `HECSGenerated/ResolversMapRuntime.cs` | `GetResolversMapRuntime()` — стабильная инфраструктура `ResolversMap`: словари по хешам; `CollectRegistrations()` = `foreach (var container in TypesMap.GetContainers<IResolverContainer>()) container.RegisterResolvers(this);` |
+| `HECSGenerated/Resolvers/<X>Resolver.cs` | `GetSerializationResolvers()`; для `[HECSResolver]`-классов — `GetUniversalResolverFile()` |
+| `HECSGenerated/Containers/<X>FastContainer.cs` | `GetFastComponentContainer()` — строка регистрации + `IFastComponentContainer` (`RegisterWorld`/`UnRegisterWorld` → `FastComponentProvider<X>`) для каждого `IFastComponent` |
+| `HECSGenerated/Containers/<X>ResolverContainer.cs` | `GetCustomResolverRegistration()` — строка регистрации + `IResolverContainer` и `internal void RegisterCustom_<X>()` в `ResolversMap` |
 | `HECSGenerated/FastComponentsProviders/<X>FastProvider.cs` | `GetProvidersForFastComponent()` |
-
-> 🧹 `HECSGenerated/Resolvers/` **полностью очищается** (`CleanDirectory`) перед записью — файлы и подпапки.
 
 ### 8.3 Если `commandMapneeded`
 
@@ -182,9 +196,9 @@ isHaveReact = Name.Contains("React")     // эвристика!
 
 ---
 
-## 9. Как устроен `SystemBindings.cs`
+## 9. Как устроены контейнеры систем (`Containers/<X>Container.cs`)
 
-Самый нетривиальный генератор. Для каждой **неабстрактной** системы создаётся контейнер с методами bind/unbind. Наполняется из двух источников:
+Самый нетривиальный генератор (бывший `SystemBindings.cs`). Для каждой **неабстрактной** системы создаётся контейнер с методами bind/unbind (`FillSystemBindings`). Наполняется из двух источников:
 
 ### 9.1 Дженерик-интерфейсы (`ProcessReacts`)
 
@@ -243,21 +257,13 @@ for (int i = 0; i < length; i++) {
 
 Тот же метод живёт в рантайме (`BaseSystem.GetTypeHashCode`) — поэтому **алгоритм менять нельзя**, иначе разъедутся генерат и рантайм.
 
-### Битовая маска компонентов
+### Индекс и маска компонента
 
-- `ComponentsCountRoslyn()` = `ceil(componentsCount / 61)` — сколько `ulong`-полей нужно маске.
-- `CalculateIndexesForMaskRoslyn(index, fieldCount)` раскладывает `index + 1` по 63 бита на поле:
+Генератор их больше не пишет (`HECSMasks.cs` / `HMasks` не генерируются). `HECSMask` — пара `Index` + `TypeHashCode`; `Index` назначает рукописный `TypesProvider.Build()` в рантайме, в порядке регистрации контейнеров (`index = i + 1`, `0` занят `DefaultEmpty`). Индекс процессно-локален: наружу уходят только `TypeHashCode` и ShortID. Два типа с одинаковым `TypeHashCode` → `Build()` бросает `InvalidOperationException` с именами обоих.
 
-```csharp
-var calculate = index + 1;
-var intPart   = calculate / 63;   // номер ulong-поля
-var fractPart = calculate % 63;   // бит внутри поля
-if (fractPart == 0) { fractPart = 63; intPart -= 1; }
-```
+### ShortID
 
-> Расхождение констант **61 и 63** намеренное — запас, но при правках учитывайте оба места.
-
-- В `MapIndexes` первой строкой всегда идёт заглушка `{ -1, ComponentName = "DefaultEmpty", ComponentsMask = HECSMask.Empty }`, а `Count = componentsDeclarations.Count + 1`.
+`GetShortIdPart()` нумерует сетевые команды и `INetworkComponent` подряд после сортировки по имени типа (`OrderBy(x => x.Type, StringComparer.Ordinal).ToList()`) — не зависит от культуры. Новый сетевой тип сдвигает номера следующих за ним по алфавиту.
 
 ---
 

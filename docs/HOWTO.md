@@ -42,7 +42,7 @@ RoslynHECS.exe path:D:\MyGame\Assets\
 # Серверный проект (генерат в <path>/HECSGenerated/)
 RoslynHECS.exe path:/repo/Server/ server
 
-# Только TypesMap/Masks/Bindings, без резолверов и blueprint'ов
+# Только контейнеры типов, без резолверов и blueprint'ов
 RoslynHECS.exe path:D:\MyGame\Assets\ no_resolvers no_blueprints
 ```
 
@@ -85,9 +85,9 @@ namespace Components
 }
 ```
 
-Запустить генератор → появятся `HealthComponentResolver.cs`, запись в `TypeProvider.cs`, поле в `HMasks`, `HealthComponentBluePrint.cs`.
+Запустить генератор → появятся `Containers/HealthComponentContainer.cs`, `HealthComponentResolver.cs`, `HealthComponentBluePrint.cs`.
 
-> ⚠️ Новый компонент **сдвигает индексы масок** остальных компонентов. Все клиенты/серверы должны быть пересобраны с одинаковым набором компонентов.
+> Индексы и маски компонентов назначаются в рантайме и наружу не уходят — новый компонент сетевой протокол не ломает. Исключение — сетевые типы (`INetworkComponent`, сетевые команды): новый сдвигает ShortID, клиент и сервер генерируются с одинаковым набором.
 
 ---
 
@@ -101,7 +101,7 @@ public sealed class DamageSystem : BaseSystem, IReactCommand<DamageCommand>
 }
 ```
 
-Генератор увидит `IReactCommand<DamageCommand>` в base-list и допишет в `SystemBindings.cs`:
+Генератор увидит `IReactCommand<DamageCommand>` в base-list и допишет в `BindSystem` контейнера `Containers/DamageSystemContainer.cs`:
 
 ```csharp
 var currentSystem = (DamageSystem)system;
@@ -276,7 +276,7 @@ var pureSystems = classes.Where(x => x.Identifier.ValueText != "BaseSystem"
 
 1. **Ничего не сгенерировалось.** Проверьте вывод: число найденных файлов, `components N`, `systems N`. Ноль → неправильный `ScriptsPath` или не сработал матчинг base-list.
 2. **Файлы «сохранены», но их нет.** Ищите в консоли `we cant save file to …` — `SaveToFile` глотает исключения.
-3. **Компонент не попал в маску.** Он абстрактный? Наследуется от `BaseComponent` по цепочке, где какое-то звено вне `ScriptsPath`? Имя базового типа в base-list написано с неймспейсом или через алиас?
+3. **У компонента нет контейнера.** Он абстрактный? Наследуется от `BaseComponent` по цепочке, где какое-то звено вне `ScriptsPath`? Имя базового типа в base-list написано с неймспейсом или через алиас?
 4. **Поле не сериализуется.** `[Field]` без аргументов (`ArgumentList == null` → пропуск)? Свойство без сеттера? Компонент помечен `[HECSDefaultResolver]` (тогда свой резолвер не генерируется)? Компонент абстрактный?
 5. **Интерфейс-реакция не подхватился.** Он дженерик? Только дженерик-интерфейсы попадают в `genericInterfacesOverData`. Проверьте, что имя интерфейса точно совпадает с константой в `CodeGenerator`.
 6. **Смотреть промежуточное состояние** удобнее всего брейкпойнтом в `Program.SaveFiles()` — там уже собраны все графы. Или временный дамп:
@@ -307,6 +307,6 @@ git commit -m "bump HECSCore"
 - [ ] Прогнан на реальном проекте, в консоли нет `we cant save file to`
 - [ ] Числа `components N` / `systems N` не изменились неожиданно
 - [ ] Целевой проект компилируется с новым генератом
-- [ ] Не менялись: алгоритм `IndexGenerator`, раскладка маски (61/63), сигнатуры partial-методов `World`
+- [ ] Не менялись: алгоритм `IndexGenerator`, `TypeContainersRegistry`/`Add`, контракты контейнеров (`I*Container`), `ComponentProvider<T>.RegisterWorld`, `FastComponentProvider<T>.RegisterWorld`/`UnRegisterWorld`
 - [ ] `order` существующих `[Field]` не переиспользованы
 - [ ] Если правился `HECSCore` — сабмодуль запушен и указатель обновлён
