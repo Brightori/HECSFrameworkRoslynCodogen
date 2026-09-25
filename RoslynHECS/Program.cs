@@ -479,9 +479,10 @@ namespace RoslynHECS
             DeleteLegacyFile(HECSGenerated + "FastWorldPart.cs");
             DeleteLegacyFile(HECSGenerated + MapResolver);
             DeleteLegacyFile(HECSGenerated + CustomAndUniversalResolvers);
+            DeleteLegacyFile(HECSGenerated + "WorldRegistration.cs");
+            DeleteLegacyContainers(containersPath);
 
             SaveToFile(HecsMasks, processGeneration.GenerateHecsMasksRoslyn(), HECSGenerated);
-            SaveToFile("WorldRegistration.cs", processGeneration.GetWorldRegistrationRuntime(resolversNeeded), HECSGenerated);
 
             //контейнеры: файл на тип, меняется только вместе со своим типом
             foreach (var component in componentOverData.Values)
@@ -489,7 +490,7 @@ namespace RoslynHECS
                 if (component.IsAbstract)
                     continue;
 
-                SaveToFile($"{component.Name}.Container.cs", processGeneration.GetComponentContainer(component, resolversNeeded), containersPath);
+                SaveToFile($"{component.Name}{ContainerSuffix}.cs", processGeneration.GetComponentContainer(component, resolversNeeded), containersPath);
             }
 
             foreach (var system in systemOverData.Values)
@@ -497,7 +498,7 @@ namespace RoslynHECS
                 if (system.IsAbstract)
                     continue;
 
-                SaveToFile($"{system.Name}.Container.cs", processGeneration.GetSystemContainerFile(system), containersPath);
+                SaveToFile($"{system.Name}{ContainerSuffix}.cs", processGeneration.GetSystemContainerFile(system), containersPath);
             }
 
             if (resolversNeeded)
@@ -514,10 +515,10 @@ namespace RoslynHECS
                     SaveToFile(c.fileName, c.data, fastProvidersPath);
 
                 foreach (var fastComponent in fastComponents)
-                    SaveToFile($"{fastComponent.Identifier.ValueText}.FastContainer.cs", processGeneration.GetFastComponentContainer(fastComponent), containersPath);
+                    SaveToFile($"{fastComponent.Identifier.ValueText}{FastContainerSuffix}.cs", processGeneration.GetFastComponentContainer(fastComponent), containersPath);
 
                 foreach (var customResolver in customHecsResolvers)
-                    SaveToFile($"{customResolver.Key}.CustomResolver.cs", processGeneration.GetCustomResolverRegistration(customResolver.Key, customResolver.Value), containersPath);
+                    SaveToFile($"{customResolver.Key}{ResolverContainerSuffix}.cs", processGeneration.GetCustomResolverRegistration(customResolver.Key, customResolver.Value), containersPath);
 
                 foreach (var universalResolver in hecsResolverCollection)
                     SaveToFile($"{universalResolver.Value.Name}Resolver.cs", processGeneration.GetUniversalResolverFile(universalResolver.Value), resolversPath);
@@ -649,6 +650,20 @@ namespace RoslynHECS
             catch
             {
                 Console.WriteLine($"не смогли удалить легаси-файл: {fullPath}");
+            }
+        }
+
+        private static void DeleteLegacyContainers(string containersPath)
+        {
+            var directoryInfo = new DirectoryInfo(containersPath);
+
+            if (!directoryInfo.Exists)
+                return;
+
+            foreach (var file in directoryInfo.GetFiles("*.cs"))
+            {
+                if (file.Name.EndsWith(".Container.cs") || file.Name.EndsWith(".FastContainer.cs") || file.Name.EndsWith(".CustomResolver.cs"))
+                    DeleteLegacyFile(file.FullName);
             }
         }
 

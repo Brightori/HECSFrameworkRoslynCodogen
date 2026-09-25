@@ -15,7 +15,24 @@ namespace HECSFramework.Core.Generator
     public partial class CodeGenerator
     {
         public const string ContainerSuffix = "Container";
-        public const string PreserveAttr = "[Preserve]";
+        public const string FastContainerSuffix = "FastContainer";
+        public const string ResolverContainerSuffix = "ResolverContainer";
+        public const string TypeContainersRegistry = "TypeContainersRegistry";
+
+        /// <summary>
+        /// Строка регистрации контейнера: статическое поле в рукописном TypeContainersRegistry
+        /// (HECS.Core), инициализаторы всех partial-частей выполняются в его статическом конструкторе.
+        /// </summary>
+        private ISyntax GetRegistryRecord(string containerName)
+        {
+            var tree = new TreeSyntaxNode();
+            tree.Add(new TabSimpleSyntax(1, $"internal static partial class {TypeContainersRegistry}"));
+            tree.Add(new LeftScopeSyntax(1));
+            tree.Add(new TabSimpleSyntax(2, $"private static readonly bool {containerName} = Add(new {containerName}());"));
+            tree.Add(new RightScopeSyntax(1));
+            tree.Add(new ParagraphSyntax());
+            return tree;
+        }
 
         #region ComponentContainer
         public string GetComponentContainer(LinkedNode component, bool withResolvers)
@@ -51,30 +68,20 @@ namespace HECSFramework.Core.Generator
             tree.Add(new NameSpaceSyntax(DefaultNameSpace));
             tree.Add(new LeftScopeSyntax());
 
-            //регистрация в TypesProvider — метод собирается рефлексией по префиксу Register_
-            tree.Add(new TabSimpleSyntax(1, "public partial class TypesProvider"));
-            tree.Add(new LeftScopeSyntax(1));
-            tree.Add(new TabSimpleSyntax(2, PreserveAttr));
-            tree.Add(new TabSimpleSyntax(2, $"private void Register_{name}() => RegisterComponent(new {name}{ContainerSuffix}());"));
-            tree.Add(new RightScopeSyntax(1));
-            tree.Add(new ParagraphSyntax());
+            tree.Add(GetRegistryRecord(name + ContainerSuffix));
 
-            //сам контейнер: только локальные данные типа
-            tree.Add(new TabSimpleSyntax(1, PreserveAttr));
-            tree.Add(new TabSimpleSyntax(1, $"public sealed class {name}{ContainerSuffix} : IComponentContainer"));
+            //сам контейнер: данные типа, провайдер компонента для мира и регистрация его резолверов
+            var interfaces = withResolvers ? "IComponentContainer, IResolverContainer" : "IComponentContainer";
+            tree.Add(new TabSimpleSyntax(1, $"public sealed class {name}{ContainerSuffix} : {interfaces}"));
             tree.Add(new LeftScopeSyntax(1));
             tree.Add(new TabSimpleSyntax(2, $"public Type ComponentType => typeof({name});"));
             tree.Add(new TabSimpleSyntax(2, $"public int TypeHashCode => {hash};"));
             tree.Add(new TabSimpleSyntax(2, $"public IComponent Factory() => new {name}();"));
-            tree.Add(new TabSimpleSyntax(2, "public void AfterBuild(HECSMask mask, int index) { }"));
-            tree.Add(new RightScopeSyntax(1));
-            tree.Add(new ParagraphSyntax());
+            tree.Add(new TabSimpleSyntax(2, $"public void RegisterWorld(World world) => ComponentProvider<{name}>.RegisterWorld(world);"));
 
-            //часть World: регистрация провайдера компонента (бывший ComponentsWorldPart.cs)
-            tree.Add(new TabSimpleSyntax(1, "public partial class World"));
-            tree.Add(new LeftScopeSyntax(1));
-            tree.Add(new TabSimpleSyntax(2, PreserveAttr));
-            tree.Add(new TabSimpleSyntax(2, $"private void WorldRegister_{name}() => RegisterComponentProvider(new ComponentProviderRegistrator<{name}>());"));
+            if (withResolvers)
+                tree.Add(new TabSimpleSyntax(2, $"public void RegisterResolvers(ResolversMap map) => map.RegisterResolver_{name}();"));
+
             tree.Add(new RightScopeSyntax(1));
 
             //часть ResolversMap: сериализация компонента (бывшие switch-и MapResolver.cs)
@@ -95,8 +102,7 @@ namespace HECSFramework.Core.Generator
 
             tree.Add(new TabSimpleSyntax(1, "public partial class ResolversMap"));
             tree.Add(new LeftScopeSyntax(1));
-            tree.Add(new TabSimpleSyntax(2, PreserveAttr));
-            tree.Add(new TabSimpleSyntax(2, $"private void RegisterResolver_{name}()"));
+            tree.Add(new TabSimpleSyntax(2, $"internal void RegisterResolver_{name}()"));
             tree.Add(new LeftScopeSyntax(2));
 
             //упаковка компонента в контейнер (бывший GetContainerForComponentFuncProvider)
@@ -163,19 +169,13 @@ namespace HECSFramework.Core.Generator
             tree.Add(new NameSpaceSyntax(DefaultNameSpace));
             tree.Add(new LeftScopeSyntax());
 
-            tree.Add(new TabSimpleSyntax(1, "public partial class TypesProvider"));
-            tree.Add(new LeftScopeSyntax(1));
-            tree.Add(new TabSimpleSyntax(2, PreserveAttr));
-            tree.Add(new TabSimpleSyntax(2, $"private void Register_{name}() => RegisterSystem(new {name}{ContainerSuffix}());"));
-            tree.Add(new RightScopeSyntax(1));
-            tree.Add(new ParagraphSyntax());
+            tree.Add(GetRegistryRecord(name + ContainerSuffix));
 
             var fields = new TreeSyntaxNode();
             var systemPlace = new TreeSyntaxNode();
             var bindBody = new TreeSyntaxNode();
             var unbindBody = new TreeSyntaxNode();
 
-            tree.Add(new TabSimpleSyntax(1, PreserveAttr));
             tree.Add(new TabSimpleSyntax(1, $"public sealed class {name}{ContainerSuffix} : ISystemContainer"));
             tree.Add(new LeftScopeSyntax(1));
             tree.Add(fields);
@@ -264,107 +264,20 @@ namespace HECSFramework.Core.Generator
         {
             var name = fastComponent.Identifier.ValueText;
 
+            var containerName = name + FastContainerSuffix;
+
             var tree = new TreeSyntaxNode();
             tree.Add(new UsingSyntax("Components", 1));
             tree.Add(new NameSpaceSyntax(DefaultNameSpace));
             tree.Add(new LeftScopeSyntax());
-            tree.Add(new TabSimpleSyntax(1, "public partial class World"));
+            tree.Add(GetRegistryRecord(containerName));
+            tree.Add(new TabSimpleSyntax(1, $"public sealed class {containerName} : IFastComponentContainer"));
             tree.Add(new LeftScopeSyntax(1));
-            tree.Add(new TabSimpleSyntax(2, PreserveAttr));
-            tree.Add(new TabSimpleSyntax(2, $"private void WorldRegisterFast_{name}() => RegisterTypeRegistrator(new TypeRegistrator<{name}>());"));
+            tree.Add(new TabSimpleSyntax(2, $"public void RegisterWorld(World world) => FastComponentProvider<{name}>.RegisterWorld(world);"));
+            tree.Add(new TabSimpleSyntax(2, $"public void UnRegisterWorld(World world) => FastComponentProvider<{name}>.UnRegisterWorld(world);"));
             tree.Add(new RightScopeSyntax(1));
             tree.Add(new RightScopeSyntax());
 
-            return tree.ToString();
-        }
-        #endregion
-
-        #region WorldRegistrationRuntime
-        /// <summary>
-        /// Стабильный файл: реализация partial-методов World (FillRegistrators/FillTypeRegistrators)
-        /// через сбор методов WorldRegister_* рефлексией. Содержимое не зависит от набора типов.
-        /// </summary>
-        public string GetWorldRegistrationRuntime(bool withFastComponents)
-        {
-            var tree = new TreeSyntaxNode();
-            tree.Add(new UsingSyntax("System"));
-            tree.Add(new UsingSyntax("System.Collections.Generic"));
-            tree.Add(new UsingSyntax("System.Reflection", 1));
-
-            tree.Add(new NameSpaceSyntax(DefaultNameSpace));
-            tree.Add(new LeftScopeSyntax());
-            tree.Add(new TabSimpleSyntax(1, "public partial class World"));
-            tree.Add(new LeftScopeSyntax(1));
-
-            tree.Add(new TabSimpleSyntax(2, "public const string WorldRegisterPrefix = \"WorldRegister_\";"));
-            tree.Add(new TabSimpleSyntax(2, "public const string WorldRegisterFastPrefix = \"WorldRegisterFast_\";"));
-            tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(2, "private static MethodInfo[] worldRegisterMethods;"));
-            tree.Add(new TabSimpleSyntax(2, "private static MethodInfo[] worldRegisterFastMethods;"));
-            tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(2, "private List<ComponentProviderRegistrator> collectedComponentProviders;"));
-
-            tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(2, "partial void FillRegistrators()"));
-            tree.Add(new LeftScopeSyntax(2));
-            tree.Add(new TabSimpleSyntax(3, "if (worldRegisterMethods == null)"));
-            tree.Add(new TabSimpleSyntax(4, "CollectWorldRegistrationMethods();"));
-            tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(3, "collectedComponentProviders = new List<ComponentProviderRegistrator>(worldRegisterMethods.Length);"));
-            tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(3, "foreach (var method in worldRegisterMethods)"));
-            tree.Add(new TabSimpleSyntax(4, "method.Invoke(this, null);"));
-            tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(3, "componentProviderRegistrators = collectedComponentProviders.ToArray();"));
-            tree.Add(new TabSimpleSyntax(3, "collectedComponentProviders = null;"));
-            tree.Add(new RightScopeSyntax(2));
-
-            tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(2, "private void RegisterComponentProvider(ComponentProviderRegistrator registrator) => collectedComponentProviders.Add(registrator);"));
-
-            if (withFastComponents)
-            {
-                tree.Add(new ParagraphSyntax());
-                tree.Add(new TabSimpleSyntax(2, "private List<TypeRegistrator> collectedTypeRegistrators;"));
-                tree.Add(new ParagraphSyntax());
-                tree.Add(new TabSimpleSyntax(2, "partial void FillTypeRegistrators()"));
-                tree.Add(new LeftScopeSyntax(2));
-                tree.Add(new TabSimpleSyntax(3, "if (worldRegisterFastMethods == null)"));
-                tree.Add(new TabSimpleSyntax(4, "CollectWorldRegistrationMethods();"));
-                tree.Add(new ParagraphSyntax());
-                tree.Add(new TabSimpleSyntax(3, "collectedTypeRegistrators = new List<TypeRegistrator>(worldRegisterFastMethods.Length);"));
-                tree.Add(new ParagraphSyntax());
-                tree.Add(new TabSimpleSyntax(3, "foreach (var method in worldRegisterFastMethods)"));
-                tree.Add(new TabSimpleSyntax(4, "method.Invoke(this, null);"));
-                tree.Add(new ParagraphSyntax());
-                tree.Add(new TabSimpleSyntax(3, "typeRegistrators = collectedTypeRegistrators.ToArray();"));
-                tree.Add(new TabSimpleSyntax(3, "collectedTypeRegistrators = null;"));
-                tree.Add(new RightScopeSyntax(2));
-                tree.Add(new ParagraphSyntax());
-                tree.Add(new TabSimpleSyntax(2, "private void RegisterTypeRegistrator(TypeRegistrator registrator) => collectedTypeRegistrators.Add(registrator);"));
-            }
-
-            tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(2, "private static void CollectWorldRegistrationMethods()"));
-            tree.Add(new LeftScopeSyntax(2));
-            tree.Add(new TabSimpleSyntax(3, "var methods = typeof(World).GetMethods(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.DeclaredOnly);"));
-            tree.Add(new TabSimpleSyntax(3, "var regular = new List<MethodInfo>(512);"));
-            tree.Add(new TabSimpleSyntax(3, "var fast = new List<MethodInfo>(512);"));
-            tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(3, "foreach (var method in methods)"));
-            tree.Add(new LeftScopeSyntax(3));
-            tree.Add(new TabSimpleSyntax(4, "if (method.Name.StartsWith(WorldRegisterFastPrefix, StringComparison.Ordinal))"));
-            tree.Add(new TabSimpleSyntax(5, "fast.Add(method);"));
-            tree.Add(new TabSimpleSyntax(4, "else if (method.Name.StartsWith(WorldRegisterPrefix, StringComparison.Ordinal))"));
-            tree.Add(new TabSimpleSyntax(5, "regular.Add(method);"));
-            tree.Add(new RightScopeSyntax(3));
-            tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(3, "worldRegisterMethods = regular.ToArray();"));
-            tree.Add(new TabSimpleSyntax(3, "worldRegisterFastMethods = fast.ToArray();"));
-            tree.Add(new RightScopeSyntax(2));
-
-            tree.Add(new RightScopeSyntax(1));
-            tree.Add(new RightScopeSyntax());
             return tree.ToString();
         }
         #endregion
@@ -372,15 +285,13 @@ namespace HECSFramework.Core.Generator
         #region ResolversMapRuntime
         /// <summary>
         /// Стабильный файл: инфраструктура ResolversMap (бывший MapResolver.cs).
-        /// Словари по хешам вместо switch-ей; наполнение — методами RegisterResolver_* /
-        /// RegisterCustom_* из partial-частей, собранными рефлексией.
+        /// Словари по хешам вместо switch-ей; наполнение — контейнерами IResolverContainer из TypesMap.
         /// </summary>
         public string GetResolversMapRuntime()
         {
             var tree = new TreeSyntaxNode();
             tree.Add(new UsingSyntax("System"));
             tree.Add(new UsingSyntax("System.Collections.Generic"));
-            tree.Add(new UsingSyntax("System.Reflection"));
             tree.Add(new UsingSyntax("Components"));
             tree.Add(new UsingSyntax("MessagePack.Resolvers"));
             tree.Add(new UsingSyntax("MessagePack", 1));
@@ -393,9 +304,6 @@ namespace HECSFramework.Core.Generator
             tree.Add(new TabSimpleSyntax(1, "public partial class ResolversMap"));
             tree.Add(new LeftScopeSyntax(1));
 
-            tree.Add(new TabSimpleSyntax(2, "public const string ResolverRegistrationPrefix = \"RegisterResolver_\";"));
-            tree.Add(new TabSimpleSyntax(2, "public const string CustomResolverRegistrationPrefix = \"RegisterCustom_\";"));
-            tree.Add(new ParagraphSyntax());
             tree.Add(new TabSimpleSyntax(2, $"public delegate void ProcessComponentByHashDelegate(ref {ResolverContainer} container, int worldIndex);"));
             tree.Add(new TabSimpleSyntax(2, $"public delegate void ResolverToEntityDelegate(ref {ResolverContainer} container, ref Entity entity);"));
             tree.Add(new ParagraphSyntax());
@@ -421,18 +329,8 @@ namespace HECSFramework.Core.Generator
             tree.Add(new ParagraphSyntax());
             tree.Add(new TabSimpleSyntax(2, "private void CollectRegistrations()"));
             tree.Add(new LeftScopeSyntax(2));
-            tree.Add(new TabSimpleSyntax(3, "var methods = typeof(ResolversMap).GetMethods(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.DeclaredOnly);"));
-            tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(3, "foreach (var method in methods)"));
-            tree.Add(new LeftScopeSyntax(3));
-            tree.Add(new TabSimpleSyntax(4, "if (!method.Name.StartsWith(ResolverRegistrationPrefix, StringComparison.Ordinal) && !method.Name.StartsWith(CustomResolverRegistrationPrefix, StringComparison.Ordinal))"));
-            tree.Add(new TabSimpleSyntax(5, "continue;"));
-            tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(4, "if (method.GetParameters().Length != 0 || method.ReturnType != typeof(void))"));
-            tree.Add(new TabSimpleSyntax(5, "continue;"));
-            tree.Add(new ParagraphSyntax());
-            tree.Add(new TabSimpleSyntax(4, "method.Invoke(this, null);"));
-            tree.Add(new RightScopeSyntax(3));
+            tree.Add(new TabSimpleSyntax(3, "foreach (var container in TypesMap.GetContainers<IResolverContainer>())"));
+            tree.Add(new TabSimpleSyntax(4, "container.RegisterResolvers(this);"));
             tree.Add(new RightScopeSyntax(2));
 
             tree.Add(new ParagraphSyntax());
@@ -501,6 +399,7 @@ namespace HECSFramework.Core.Generator
         public string GetCustomResolverRegistration(string typeName, ResolverData resolverData)
         {
             var hash = IndexGenerator.GenerateIndex(typeName);
+            var containerName = typeName + ResolverContainerSuffix;
 
             var tree = new TreeSyntaxNode();
             var usings = new TreeSyntaxNode();
@@ -515,10 +414,15 @@ namespace HECSFramework.Core.Generator
 
             tree.Add(new NameSpaceSyntax(DefaultNameSpace));
             tree.Add(new LeftScopeSyntax());
+            tree.Add(GetRegistryRecord(containerName));
+            tree.Add(new TabSimpleSyntax(1, $"public sealed class {containerName} : IResolverContainer"));
+            tree.Add(new LeftScopeSyntax(1));
+            tree.Add(new TabSimpleSyntax(2, $"public void RegisterResolvers(ResolversMap map) => map.RegisterCustom_{typeName}();"));
+            tree.Add(new RightScopeSyntax(1));
+            tree.Add(new ParagraphSyntax());
             tree.Add(new TabSimpleSyntax(1, "public partial class ResolversMap"));
             tree.Add(new LeftScopeSyntax(1));
-            tree.Add(new TabSimpleSyntax(2, PreserveAttr));
-            tree.Add(new TabSimpleSyntax(2, $"private void RegisterCustom_{typeName}()"));
+            tree.Add(new TabSimpleSyntax(2, $"internal void RegisterCustom_{typeName}()"));
             tree.Add(new LeftScopeSyntax(2));
             tree.Add(new TabSimpleSyntax(3, $"typeToCustomResolver.Add(typeof({typeName}), new CustomResolverProvider<{typeName}, {resolverData.ResolverName}>());"));
             tree.Add(new TabSimpleSyntax(3, $"typeCodeToCustomResolver.Add({hash}, new CustomResolverProvider<{typeName}, {resolverData.ResolverName}>());"));
