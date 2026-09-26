@@ -722,6 +722,10 @@ namespace RoslynHECS
 
             foreach (FileInfo file in directoryInfo.GetFiles())
             {
+                //.meta оставляем: у перегенерированного файла сохраняется GUID, а .meta без файла Unity удалит сам
+                if (file.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
                 file.Delete();
             }
             foreach (DirectoryInfo dir in directoryInfo.GetDirectories())
