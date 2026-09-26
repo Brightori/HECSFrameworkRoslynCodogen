@@ -128,8 +128,8 @@ namespace RoslynHECS
             Console.WriteLine(files.Count);
 
             //порядок файлов фиксируем: от него зависит порядок классов, а значит содержимое
-            //монолитов (HECSMasks, BluePrintsProvider); ConcurrentBag давал случайный порядок
-            //и эти файлы переписывались на каждом прогоне
+            //общих файлов генерата (CommandsMap.cs); ConcurrentBag давал случайный порядок
+            //и такие файлы переписывались на каждом прогоне
             files.Sort((x, y) => string.CompareOrdinal(x.FullName, y.FullName));
 
             var tasks = new List<Task<SyntaxTree>>(files.Count);
@@ -481,6 +481,7 @@ namespace RoslynHECS
             DeleteLegacyFile(HECSGenerated + CustomAndUniversalResolvers);
             DeleteLegacyFile(HECSGenerated + HecsMasks);
             DeleteLegacyFile(HECSGenerated + "WorldRegistration.cs");
+            DeleteLegacyFile(HECSGenerated + BluePrintsProvider);
             DeleteLegacyContainers(containersPath);
 
             //контейнеры: файл на тип, меняется только вместе со своим типом
@@ -562,8 +563,6 @@ namespace RoslynHECS
 
                 foreach (var c in actionsAsyncBPs)
                     SaveToFile(c.Item1, c.Item2, ScriptsPath + ActionsBlueprints);
-
-                SaveToFile(BluePrintsProvider, processGeneration.GetBluePrintsProvider(), HECSGenerated);
             }
 
             var generationMs = timer.ElapsedMilliseconds;

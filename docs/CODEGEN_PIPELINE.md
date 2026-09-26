@@ -115,7 +115,7 @@ isHaveReact = Name.Contains("React")     // эвристика!
 
 Две вещи:
 
-1. **`componentsDeclarations`** — все **неабстрактные** компоненты (идут в blueprint'ы и `BluePrintsProvider.cs`). Порядок в списке на индексы не влияет — их назначает рантайм (§10).
+1. **`componentsDeclarations`** — все **неабстрактные** компоненты (идут в blueprint'ы). Порядок в списке на индексы не влияет — их назначает рантайм (§10).
 2. Классы с атрибутом `[HECSResolver]` → `hecsResolverCollection` + запись в `customHecsResolvers` (`имя → имяResolver`).
 
 ---
@@ -186,11 +186,10 @@ internal static partial class TypeContainersRegistry
 
 | Куда | Что | Критерий отбора |
 |---|---|---|
-| `<Scripts>/BluePrints/ComponentsBluePrints/` | `<X>BluePrint.cs : ComponentBluePrintContainer<X>` | все `componentsDeclarations` |
-| `<Scripts>/BluePrints/SystemsBluePrint/` | `<X>BluePrint.cs : SystemBluePrint<X>` | все неабстрактные системы |
+| `<Scripts>/BluePrints/ComponentsBluePrints/` | `<X>BluePrint.cs : ComponentBluePrintContainer<X>` + строка `BluePrintsProvider.RegisterComponent` | все `componentsDeclarations` |
+| `<Scripts>/BluePrints/SystemsBluePrint/` | `<X>BluePrint.cs : SystemBluePrint<X>` + строка `BluePrintsProvider.RegisterSystem` | все неабстрактные системы |
 | `<Scripts>/BluePrints/PredicatesBlueprints/` | `<X>Blueprint.cs` | неабстрактный класс с `IPredicate` в base-list |
 | `<Scripts>/BluePrints/Actions/` | `<X>Blueprint.cs` | класс с `IAction` **или** `IAsyncAction` в base-list |
-| `HECSGenerated/BluePrintsProvider.cs` | словари blueprint'ов | — |
 
 Пути blueprint'ов склеиваются как `ScriptsPath + "/Scripts/BluePrints/..."` — то есть привязаны к Unity-раскладке.
 

@@ -60,7 +60,7 @@ Dictionary<string, LinkedNode> componentOverData                    // граф 
 Dictionary<string, LinkedNode> systemOverData                       // граф систем
 Dictionary<string, LinkedInterfaceNode>        interfacesOverData   // граф интерфейсов
 Dictionary<string, LinkedGenericInterfaceNode> genericInterfacesOverData // IReactCommand<T> и пр.
-List<ClassDeclarationSyntax>  componentsDeclarations                // НЕабстрактные компоненты (blueprint'ы, BluePrintsProvider)
+List<ClassDeclarationSyntax>  componentsDeclarations                // НЕабстрактные компоненты (blueprint'ы)
 List<StructDeclarationSyntax> globalCommands, localCommands, networkCommands, fastComponents
 Dictionary<string, ResolverData> customHecsResolvers
 Dictionary<string, LinkedNode>   hecsResolverCollection
@@ -96,7 +96,7 @@ CSharpCompilation Compilation
 #region SystemsBinding      → тела BindSystem/UnBindSystem для контейнеров систем (ProcessReacts)
 #region Resolvers           → Resolvers/*.cs
 #region CustomAndUniversalResolvers → тело универсального резолвера ([HECSResolver])
-#region ...BluePrints...    → BluePrints + BluePrintsProvider.cs
+#region ...BluePrints...    → BluePrints (у компонентов и систем — со строкой регистрации в BluePrintsProvider)
 #region CommandsResolvers   → CommandsMap.cs + ShortID
 #region Documentation       → Documentation.cs (сейчас отключён)
 ```

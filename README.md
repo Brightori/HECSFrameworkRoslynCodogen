@@ -65,9 +65,9 @@ dotnet run --project RoslynHECS -- path:/repo/Server/ server
 | `Resolvers/<X>Resolver.cs` | резолверы бинарной сериализации компонентов |
 | `ResolversMapRuntime.cs` | инфраструктура `ResolversMap`: словари по хешам, наполняются контейнерами |
 | `CommandsMap.cs` | карта сетевых команд + ShortID |
-| `BluePrints/…` + `BluePrintsProvider.cs` | Unity-blueprint'ы компонентов, систем, предикатов, экшенов |
+| `BluePrints/…` | Unity-blueprint'ы компонентов, систем, предикатов, экшенов; blueprint компонента или системы регистрирует пару «тип → blueprint» в рукописном `BluePrintsProvider` (HECS.Unity) |
 
-Каждый контейнер регистрируется строкой в рукописном `TypeContainersRegistry` (ядро), без рефлексии; индексы и маски считаются в рантайме. Старые монолиты (`TypeProvider.cs`, `SystemBindings.cs`, `HECSMasks.cs`, `ComponentsWorldPart.cs`, `FastWorldPart.cs`, `MapResolver.cs`, `CustomAndUniversalResolvers.cs`, `WorldRegistration.cs`) не генерируются и удаляются при прогоне.
+Каждый контейнер регистрируется строкой в рукописном `TypeContainersRegistry` (ядро), без рефлексии; индексы и маски считаются в рантайме. Старые монолиты (`TypeProvider.cs`, `SystemBindings.cs`, `HECSMasks.cs`, `ComponentsWorldPart.cs`, `FastWorldPart.cs`, `MapResolver.cs`, `CustomAndUniversalResolvers.cs`, `WorldRegistration.cs`, `BluePrintsProvider.cs`) не генерируются и удаляются при прогоне.
 
 ---
 

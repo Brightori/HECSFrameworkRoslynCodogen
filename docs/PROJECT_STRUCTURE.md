@@ -133,7 +133,6 @@ PublishProfiles/MacOs Profile.pubxml      — публикация под macOS
 | `FastWorldPart.GetProvidersForFastComponent` | `FastComponentsProviders/<X>FastProvider.cs` |
 | `CodogeneratorRoslynPart.GetSerializationResolvers` | `Resolvers/<X>Resolver.cs` |
 | `CodogeneratorRoslynPart.GenerateNetworkCommandsAndShortIdsMap` | `CommandsMap.cs` |
-| `CodogeneratorRoslynPart.Generate*BluePrints` / `Get*BluePrints` | BluePrints в `Assets/Scripts/BluePrints/...` |
-| `CodogeneratorRoslynPart.GetBluePrintsProvider` | `BluePrintsProvider.cs` |
+| `CodogeneratorRoslynPart.Generate*BluePrints` / `Get*BluePrints` | BluePrints в `Assets/Scripts/BluePrints/...`; у компонентов и систем — со строкой регистрации в `BluePrintsProvider` (`GetBluePrintRecord`) |
 
 Подробности — в [CODEGEN_PIPELINE.md](CODEGEN_PIPELINE.md).
